@@ -1,0 +1,3 @@
+import type {AgentReasoningAuditEvent,AgentReasoningAuditEventType} from "@/domain/agent-reasoning/types";
+
+export function createReasoningAuditEvent(input:{traceId:string;requestId:string;contextId:string;candidateId?:string;evaluationId?:string;actorType:AgentReasoningAuditEvent["actorType"];eventType:AgentReasoningAuditEventType;timestamp:string;details?:Record<string,string|number|boolean>}):AgentReasoningAuditEvent{return{id:`reasoning-audit-${input.traceId}-${input.eventType}-${input.candidateId??"none"}`,traceId:input.traceId,requestId:input.requestId,contextId:input.contextId,candidateId:input.candidateId,evaluationId:input.evaluationId,actorType:input.actorType,eventType:input.eventType,timestamp:input.timestamp,details:input.details??{}};}

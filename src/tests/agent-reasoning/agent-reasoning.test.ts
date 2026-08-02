@@ -1,0 +1,23 @@
+import {describe,expect,it} from "vitest";import {createAgentReasoningRequest,createFailureReasoner,createScriptedReasoner,deterministicRuleReasoner,parseAgentOutput,reasoningVersions,runAgentReasoning} from "@/agent-reasoning";import {syntheticAgentContextResults} from "@/data/synthetic/agent-contexts";import {createSyntheticAgentTask,agentTaskNow} from "@/data/synthetic/agent-tasks";import {reasonerFixtures} from "@/data/evaluation-fixtures/reasoner-fixtures";
+const context=(accountId="acct-coinbase",agent="renewal-agent")=>{const result=syntheticAgentContextResults.find(item=>item.context?.accountId===accountId&&item.context.agentType===agent);if(!result?.context)throw new Error("Missing context fixture");return result.context;};
+const run=(fixture="valid",accountId="acct-coinbase",agent="renewal-agent")=>runAgentReasoning({context:context(accountId,agent),reasoner:reasonerFixtures[fixture],now:agentTaskNow});
+describe("Agent Reasoning Contract",()=>{
+ it("creates a bounded request",()=>{const value=createAgentReasoningRequest({context:context(),now:agentTaskNow});expect(value.contextId).toBe(context().contextId);expect(JSON.stringify(value)).not.toContain("sourceRecords")});
+ it("rejects an unsupported reasoner agent",()=>{const reasoner=createScriptedReasoner({id:"limited",rawOutput:{},supported:["forecast-agent"]});expect(runAgentReasoning({context:context(),reasoner,now:agentTaskNow}).errors[0].code).toBe("unsupported-agent")});
+ it("produces deterministic candidates",()=>{const first=runAgentReasoning({context:context(),reasoner:deterministicRuleReasoner,now:agentTaskNow}),second=runAgentReasoning({context:context(),reasoner:deterministicRuleReasoner,now:agentTaskNow});expect(first.candidate).toEqual(second.candidate)});
+ it("parses a scripted object",()=>expect(run().parseResult.success).toBe(true));
+ it("parses a JSON string",()=>expect(run("valid-json").parseResult.success).toBe(true));
+ it("handles timeout",()=>expect(runAgentReasoning({context:context(),reasoner:createFailureReasoner("timeout"),now:agentTaskNow}).errors[0].code).toBe("reasoner-timeout"));
+ it("handles malformed JSON",()=>expect(run("malformed-json").parseResult.errors[0].code).toBe("malformed-json"));
+ it("handles partial output",()=>expect(run("partial-output").parseResult.success).toBe(false));
+ it("reports missing fields",()=>expect(run("missing-fields").parseResult.errors.some(item=>item.field==="recommendedAction")).toBe(true));
+ it("warns about extra fields",()=>expect(run("extra-fields").parseResult.warnings.some(item=>item.code==="unknown-fields")).toBe(true));
+ it("rejects invalid confidence",()=>expect(run("invalid-confidence").parseResult.errors.some(item=>item.code==="invalid-confidence")).toBe(true));
+ it("rejects negative impact",()=>expect(run("negative-impact").parseResult.errors.some(item=>item.code==="invalid-financial-impact")).toBe(true));
+ it("normalizes duplicate evidence citations",()=>{const base=run().candidate!,response={...run().response!,rawOutput:{...base,evidenceIds:[base.evidenceIds[0],base.evidenceIds[0]]}};expect(parseAgentOutput({response,outputSchemaVersion:reasoningVersions.decisionCandidateSchemaVersion,now:agentTaskNow}).warnings.some(item=>item.code==="duplicate-citation-normalized")).toBe(true)});
+ it("rejects duplicate claim IDs",()=>{const base=run().candidate!,claim=base.claimReferences![0],response={...run().response!,rawOutput:{...base,claimReferences:[claim,claim]}};expect(parseAgentOutput({response,outputSchemaVersion:reasoningVersions.decisionCandidateSchemaVersion,now:agentTaskNow}).errors.some(item=>item.code==="duplicate-claim-id")).toBe(true)});
+ it("rejects unsupported output versions",()=>expect(runAgentReasoning({context:context(),reasoner:deterministicRuleReasoner,outputSchemaVersion:"v999",now:agentTaskNow}).errors[0].code).toBe("unsupported-schema"));
+ it("creates audit events",()=>expect(run().auditEvents.map(item=>item.eventType)).toEqual(expect.arrayContaining(["reasoning-request-created","reasoner-started","output-parsed"])));
+ it("supports every agent type",()=>{for(const result of syntheticAgentContextResults)if(result.context)expect(runAgentReasoning({context:result.context,reasoner:deterministicRuleReasoner,now:agentTaskNow}).candidate?.responsibleAgent).toBeTruthy()});
+ it("rejects invalid task-account combinations",()=>{const task=createSyntheticAgentTask("acct-paypal","renewal-agent");expect(runAgentReasoning({context:context(),task,reasoner:deterministicRuleReasoner,now:agentTaskNow}).errors[0].code).toBe("invalid-task")});
+});

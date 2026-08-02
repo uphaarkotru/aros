@@ -19,6 +19,30 @@ export interface ModelMetadata {
   synthetic: true;
 }
 
+export type DecisionClaimType = "account-identity" | "financial-impact" | "date" | "stakeholder" | "relationship" | "product-usage" | "renewal" | "opportunity" | "forecast" | "meeting" | "recommendation-rationale" | "risk" | "qualification" | "summary";
+export type DecisionClaimCertainty = "observed" | "resolved" | "corroborated" | "inferred" | "disputed" | "uncertain";
+export interface DecisionClaim {
+  claimId: string;
+  claimType: DecisionClaimType;
+  text: string;
+  importance: "critical" | "high" | "medium" | "low";
+  factIds: string[];
+  evidenceIds: string[];
+  conflictIds: string[];
+  lineageIds: string[];
+  certainty: DecisionClaimCertainty;
+  sourceContextSection: string;
+}
+
+export interface DecisionContextMetadata {
+  contextId: string;
+  contextVersion: string;
+  taskId: string;
+  requestId: string;
+  traceId: string;
+  outputSchemaVersion: string;
+}
+
 export interface DecisionCandidate {
   candidateId: string;
   accountId: string;
@@ -29,6 +53,7 @@ export interface DecisionCandidate {
   whatHappened: string;
   whyItMatters: string;
   evidenceIds: string[];
+  factIds?: string[];
   proposedBusinessImpact: string;
   proposedBusinessImpactValue: number;
   proposedConfidence: number;
@@ -41,6 +66,8 @@ export interface DecisionCandidate {
   meetingTime?: string;
   modelMetadata: ModelMetadata;
   reasoningSummary: string;
+  claimReferences?: DecisionClaim[];
+  contextMetadata?: DecisionContextMetadata;
 }
 
 export interface ValidationIssue { code: string; field: string; message: string; severity: "error" | "warning"; }
