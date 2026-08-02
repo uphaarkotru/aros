@@ -1,0 +1,1 @@
+import {createModelRegistry} from "./create-model-registry";export const defaultModelRegistry=createModelRegistry();export {createModelRegistry} from "./create-model-registry";export {getModel} from "./get-model";

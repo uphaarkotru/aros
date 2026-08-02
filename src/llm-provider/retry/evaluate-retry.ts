@@ -1,0 +1,2 @@
+import type {LLMProviderErrorCode,LLMRetryPolicy} from "@/domain/llm-provider/types";
+export function evaluateRetry({code,attempt,policy}:{code:LLMProviderErrorCode;attempt:number;policy:LLMRetryPolicy}):{retry:boolean;delayMs:number}{const retry=attempt<policy.maximumAttempts&&policy.retryableErrorCodes.includes(code);if(!retry)return{retry:false,delayMs:0};const delayMs=Math.min(policy.maximumDelayMs,Math.round(policy.initialDelayMs*Math.pow(policy.backoffMultiplier,attempt-1)));return{retry:true,delayMs};}
