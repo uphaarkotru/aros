@@ -1,0 +1,4 @@
+import type {CitationPolicy,UncertaintyInstructionPolicy} from "@/domain/prompts/types";import {stableSerialize} from "../diagnostics/stable-serialization";
+export const renderCitationPolicy=(policy:CitationPolicy):string=>`${stableSerialize(policy)}\nIDs must come only from AgentContextPackage. Critical and financial claims require supplied fact and evidence IDs; critical claims require lineage IDs when available. Disputed claims cite conflict IDs. Unsupported claims must be omitted.`;
+export const renderUncertaintyPolicy=(policy:UncertaintyInstructionPolicy):string=>`${stableSerialize(policy)}\nUse certainty labels resolved, observed, corroborated, inferred, disputed, stale, or unknown. Label inference, staleness, disputes, material conflicts, and data gaps explicitly.`;
+export const renderProhibitedBehaviors=(behaviors:string[]):string=>behaviors.map((item,index)=>`${index+1}. ${item}`).join("\n");

@@ -1,12 +1,13 @@
 import type {AgentTask,AgentType} from "@/domain/agents/types";
 import type {DecisionCandidate} from "@/domain/decisions/types";
 import type {AgentContextPackage} from "@/domain/llm-context/types";
+import type {PromptPackage} from "@/domain/prompts/types";
 
 export type AgentReasonerResponseFormat="structured-object"|"json-string"|"malformed-json"|"partial-object";
 export interface AgentReasoningRequest{requestId:string;traceId:string;contextId:string;contextVersion:string;accountId:string;agentType:AgentType;task:AgentTask;outputSchemaVersion:string;requestedAt:string;deadline?:string;constraints:string[];metadata:Record<string,string|number|boolean>;}
 export interface AgentReasonerDiagnostics{steps:string[];warningCount:number;fixtureId?:string;}
 export interface AgentReasonerResponse{rawOutput:unknown;format:AgentReasonerResponseFormat;generatedAt:string;metadata:Record<string,string|number|boolean>;simulated:true;diagnostics:AgentReasonerDiagnostics;}
-export interface AgentReasoner{id:string;name:string;version:string;supportedAgentTypes:AgentType[];supportedOutputSchemaVersions:string[];reason(request:AgentReasoningRequest,context:AgentContextPackage):AgentReasonerResponse;}
+export interface AgentReasoner{id:string;name:string;version:string;supportedAgentTypes:AgentType[];supportedOutputSchemaVersions:string[];reason(request:AgentReasoningRequest,context:AgentContextPackage,promptPackage?:PromptPackage):AgentReasonerResponse;}
 export interface AgentOutputParseIssue{code:string;field:string;message:string;severity:"warning"|"error";}
 export interface RawOutputMetadata{format:AgentReasonerResponseFormat;size:number;unknownFields:string[];}
 export interface AgentOutputParseResult{success:boolean;candidate?:DecisionCandidate;normalizedOutput?:Record<string,unknown>;errors:AgentOutputParseIssue[];warnings:AgentOutputParseIssue[];rawOutputMetadata:RawOutputMetadata;schemaVersion:string;parsedAt:string;}

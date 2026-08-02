@@ -1,0 +1,11 @@
+import type {DecisionClaimCertainty,DecisionClaimType,DecisionType} from "@/domain/decisions/types";
+
+export const decisionTypes:DecisionType[]=["renewal-risk","expansion-opportunity","meeting-preparation","relationship-risk","forecast-risk","executive-action"];
+export const decisionClaimTypes:DecisionClaimType[]=["account-identity","financial-impact","date","stakeholder","relationship","product-usage","renewal","opportunity","forecast","meeting","recommendation-rationale","risk","qualification","summary"];
+export const decisionClaimCertainties:DecisionClaimCertainty[]=["observed","resolved","corroborated","inferred","disputed","uncertain"];
+export const decisionCandidateRequiredFields=["candidateId","accountId","proposedType","proposedCategory","proposedTitle","proposedSummary","whatHappened","whyItMatters","evidenceIds","proposedBusinessImpact","proposedBusinessImpactValue","proposedConfidence","recommendedAction","alternativeActions","responsibleAgent","requiredHumanDecision","generatedAt","reasoningSummary","claimReferences","modelMetadata","contextMetadata"] as const;
+export const decisionCandidateOptionalFields=["factIds","dueAt","meetingTime"] as const;
+export const decisionCandidateKnownFields=[...decisionCandidateRequiredFields,...decisionCandidateOptionalFields] as const;
+export const decisionCandidateSchemaDescriptor={version:"decision-candidate-v2",strictUnknownFields:false,requiredFields:decisionCandidateRequiredFields,optionalFields:decisionCandidateOptionalFields,enums:{proposedType:decisionTypes,"claimReferences.claimType":decisionClaimTypes,"claimReferences.certainty":decisionClaimCertainties},ranges:{proposedConfidence:{minimum:0,maximum:1},proposedBusinessImpactValue:{minimum:0}},rules:["evidenceIds must contain at least one supplied evidence ID","claimReferences must link material claims to supplied fact and evidence IDs","critical claims include lineage IDs when available","dates use valid ISO-8601 timestamps","financial values must be nonnegative and supported by authoritative supplied facts","modelMetadata.synthetic must be true","contextMetadata must match the request and context"]} as const;
+
+export function renderDecisionCandidateSchema():string{return JSON.stringify(decisionCandidateSchemaDescriptor,null,2);}

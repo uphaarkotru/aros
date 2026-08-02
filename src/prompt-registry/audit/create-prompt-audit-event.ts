@@ -1,0 +1,2 @@
+import type {PromptAuditEvent,PromptAuditEventType} from "@/domain/prompts/types";
+export function createPromptAuditEvent(input:{traceId:string;requestId:string;contextId:string;promptId:string;promptVersion:string;promptPackageId?:string;eventType:PromptAuditEventType;timestamp:string;details?:Record<string,string|number|boolean>}):PromptAuditEvent{return{...input,id:`prompt-audit-${input.traceId}-${input.promptId}-${input.promptVersion}-${input.eventType}`,details:input.details??{}};}

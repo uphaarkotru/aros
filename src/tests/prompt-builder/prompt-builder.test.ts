@@ -1,0 +1,15 @@
+import {describe,expect,it} from "vitest";import {createAgentReasoningRequest} from "@/agent-reasoning";import {buildPromptPackage,renderAgentContext} from "@/prompt-builder";import {defaultPromptRegistry,getPromptDefinition} from "@/prompt-registry";import {getEvaluationContext} from "@/data/evaluation-fixtures/context-fixtures";import {agentTaskNow} from "@/data/synthetic/agent-tasks";
+const context=getEvaluationContext("acct-coinbase","renewal-agent")!,definition=getPromptDefinition({agentType:"renewal-agent",taskType:"assess-risk",registry:defaultPromptRegistry}).definition!,request=createAgentReasoningRequest({context,now:agentTaskNow});
+const build=(maximumPromptTokens=12000)=>buildPromptPackage({definition,request,context,policy:{maximumPromptTokens},registry:defaultPromptRegistry,now:agentTaskNow});
+describe("Prompt Builder",()=>{
+ it("renders provider-neutral messages in stable role order",()=>expect(build().package?.messages.map(item=>item.role)).toEqual(["system","developer","user"]));
+ it("renders the centralized DecisionCandidate schema",()=>{const value=build().package?.schemaContract??"";expect(value).toContain("decision-candidate-v2");expect(value).toContain("claimReferences")});
+ it("renders citation, uncertainty, and prohibited instructions",()=>{const content=build().package?.messages.map(item=>item.content).join("\n")??"";expect(content).toContain("factIds");expect(content).toMatch(/inferred/);expect(content).toMatch(/raw source payloads/i)});
+ it("renders context sections deterministically",()=>{const first=renderAgentContext(context,definition.contextSectionPolicy),second=renderAgentContext(context,definition.contextSectionPolicy);expect(first).toEqual(second);expect(first.content.indexOf("account-summary")).toBeLessThan(first.content.indexOf("commercial"))});
+ it("preserves evidence, conflict, and provenance IDs",()=>{const value=renderAgentContext(context,definition.contextSectionPolicy).content;expect(value).toContain("evidenceId");expect(value).toContain("lineageId")});
+ it("does not leak raw source records",()=>{const value=JSON.stringify(build().package);expect(value).not.toContain("sourceRecords\"");expect(value).not.toContain("metadata.raw")});
+ it("produces deterministic package content and hashes",()=>{const first=build().package!,second=build().package!;expect(first).toEqual(second);expect(first.buildMetadata.contentHash).toMatch(/^fnv1a32-/)});
+ it("estimates categorized tokens",()=>expect(build().package?.estimatedTokens).toEqual(expect.objectContaining({systemTokens:expect.any(Number),contextTokens:expect.any(Number),schemaTokens:expect.any(Number),withinLimit:true})));
+ it("fails over budget without truncating critical instructions",()=>{const result=build(100);expect(result.errors[0].code).toBe("prompt-over-budget");expect(result.package).toBeUndefined()});
+ it("preserves context redactions",()=>{const value=build().package?.messages.map(item=>item.content).join(" ")??"";expect(value).not.toMatch(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);expect(value).not.toMatch(/\(\d{3}\) \d{3}-\d{4}/)});
+});

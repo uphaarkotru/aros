@@ -1,0 +1,15 @@
+import {describe,expect,it} from "vitest";import {comparePromptVersions,createPromptRegistry,defaultPromptRegistry,getPromptDefinition,initialPromptDefinitions,validatePromptDefinition} from "@/prompt-registry";import {promptFixtureDefinitions,promptFixtureRegistry} from "@/data/prompt-fixtures/prompt-fixtures";import {agentTaskNow} from "@/data/synthetic/agent-tasks";
+describe("Prompt Registry",()=>{
+ it("initializes all six agent prompts",()=>expect(defaultPromptRegistry.definitions).toHaveLength(6));
+ it("rejects duplicate prompt versions",()=>expect(()=>createPromptRegistry([initialPromptDefinitions[0],initialPromptDefinitions[0]])).toThrow(/duplicate-version/));
+ it("selects by agent, task, and explicit version",()=>expect(getPromptDefinition({agentType:"renewal-agent",taskType:"assess-risk",requestedVersion:"1.0.0",registry:defaultPromptRegistry}).selectionReason).toBe("explicit-version"));
+ it("selects the active default",()=>expect(getPromptDefinition({agentType:"expansion-agent",taskType:"identify-opportunity",registry:defaultPromptRegistry}).definition?.promptId).toBe("expansion-identify-opportunity"));
+ it("does not silently select unrelated prompts",()=>expect(getPromptDefinition({agentType:"renewal-agent",taskType:"prepare-meeting",registry:defaultPromptRegistry}).errors[0].code).toBe("unsupported-task"));
+ it("returns unsupported agent failures",()=>expect(getPromptDefinition({agentType:"unknown",taskType:"assess-risk",registry:defaultPromptRegistry}).errors[0].code).toBe("unsupported-agent"));
+ it("allows explicit deprecated selection with a warning",()=>{const result=getPromptDefinition({agentType:"renewal-agent",taskType:"assess-risk",promptId:"fixture-deprecated",requestedVersion:"1.0.0",registry:promptFixtureRegistry});expect(result.definition?.status).toBe("deprecated");expect(result.warnings[0].code).toBe("deprecated-prompt")});
+ it("blocks experimental prompts",()=>expect(getPromptDefinition({agentType:"renewal-agent",taskType:"assess-risk",promptId:"fixture-experimental",requestedVersion:"1.0.0",registry:promptFixtureRegistry}).errors[0].code).toBe("experimental-blocked"));
+ it("validates controlled definitions",()=>expect(validatePromptDefinition({definition:initialPromptDefinitions[0],registry:defaultPromptRegistry,now:agentTaskNow}).valid).toBe(true));
+ it("rejects missing placeholders",()=>expect(validatePromptDefinition({definition:promptFixtureDefinitions.find(item=>item.promptId==="fixture-missing-placeholder")!,now:agentTaskNow}).errors.some(item=>item.code==="missing-placeholder")).toBe(true));
+ it("rejects provider syntax",()=>expect(validatePromptDefinition({definition:promptFixtureDefinitions.find(item=>item.promptId==="fixture-provider-syntax")!,now:agentTaskNow}).errors.some(item=>item.code==="provider-specific-syntax")).toBe(true));
+ it("diffs normalized prompt structures",()=>{const result=comparePromptVersions({baseline:initialPromptDefinitions[0],candidate:promptFixtureDefinitions.find(item=>item.promptId==="renewal-assess-risk")!});expect(result.changedSections).toContain("taskInstructionTemplate");expect(result.riskLevel).toBe("low")});
+});
