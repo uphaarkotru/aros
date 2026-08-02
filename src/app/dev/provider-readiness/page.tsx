@@ -1,0 +1,2 @@
+import {notFound} from "next/navigation";import {ApplicationShell} from "@/components/application-shell";import {ProviderReadinessInspector} from "@/features/dev/provider-readiness-inspector/provider-readiness-inspector";
+export default function ProviderReadinessPage(){if(process.env.NODE_ENV==="production")notFound();return <ApplicationShell active="accounts"><ProviderReadinessInspector/></ApplicationShell>}
