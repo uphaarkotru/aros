@@ -1,158 +1,40 @@
 "use client";
 
-import { useEffect, useId, useReducer, useRef, useState } from "react";
-import { agentStatuses, initialDecisions, initialInsights, morningMetrics } from "./data";
-import { briefingReducer } from "./state";
-import type { Decision, ItemStatus, Priority, RevenueInsight, Tone } from "./types";
+import { useEffect, useId, useMemo, useReducer, useRef, useState } from "react";
+import { defaultDecisionControlPolicy } from "@/decision-control";
+import type { DecisionPriority, DecisionStatus, GovernedDecision } from "@/domain/decisions/types";
+import { agentStatuses, decisionControlResult, governedDecisions, morningMetrics } from "./data";
+import { activeDecisions, decisionQueue, intelligenceFeed, queueMetrics } from "./selectors";
+import { humanWorkflowReducer, mergeHumanState, type HumanStateMap } from "./state";
+import type { Tone } from "./types";
 
-const STORAGE_KEY = "cognivit-aros-morning-briefing";
-const navItems = ["AI Command Center", "AI Workforce", "Accounts", "Decisions", "Signals", "Forecast", "Executive", "Settings"];
+const STORAGE_KEY = "cognivit-aros-human-decision-state-v1";
+const LEGACY_STORAGE_KEY = "cognivit-aros-morning-briefing";
+const navItems = ["AI Command Center","AI Workforce","Accounts","Decisions","Signals","Forecast","Executive","Settings"];
+const now = () => new Date().toISOString();
+const money = (value:number) => new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",notation:"compact",maximumFractionDigits:1}).format(value);
+const label = (value:string) => value.split("-").map((word)=>word[0]?.toUpperCase()+word.slice(1)).join(" ");
+const toneForPriority = (priority:DecisionPriority):Tone => priority === "critical" || priority === "high" ? "red" : priority === "medium" ? "amber" : "blue";
 
-function Glyph({ children }: { children: React.ReactNode }) {
-  return <span className="glyph" aria-hidden="true">{children}</span>;
-}
+function StatusPill({children,tone="blue"}:{children:React.ReactNode;tone?:Tone|"slate"}) { return <span className={`status-pill tone-${tone}`}>{children}</span>; }
+function AppSidebar({open,onClose}:{open:boolean;onClose:()=>void}) { return <>{open&&<button className="sidebar-backdrop" aria-label="Close navigation" onClick={onClose}/>}<aside className={`sidebar ${open?"sidebar-open":""}`} aria-label="Main navigation"><div className="brand"><strong>CogniVit<span>.ai</span></strong><small>AROS · AUTONOMOUS REVENUE OS</small></div><nav>{navItems.map((item,index)=><button key={item} className={`nav-item ${index===0?"active":""}`} aria-current={index===0?"page":undefined} onClick={index===0?onClose:undefined}><span className="glyph" aria-hidden="true">{["⌁","✣","▣","◇","⌁","↗","◎","⚙"][index]}</span>{item}</button>)}</nav><div className="system-status"><span><i/> LIVE SYSTEM</span><small>214 accounts monitored</small></div></aside></>; }
+function PageHeader({onMenu}:{onMenu:()=>void}) { return <header className="page-header"><button className="menu-button" onClick={onMenu} aria-label="Open navigation"><span/><span/><span/></button><div><h1>Good Morning, Uphaar</h1><p>Your AI workforce analyzed the revenue organization overnight.</p></div><div className="avatar" aria-label="Uphaar Kotru profile">UK</div></header>; }
+function MetricCard({metric}:{metric:(typeof morningMetrics)[number]}) { return <article className="metric-card" tabIndex={0}><p>{metric.label}</p><strong>{metric.value}</strong><StatusPill tone={metric.tone}>{metric.indicator}</StatusPill></article>; }
 
-function AppSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <>
-      {open && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={onClose} />}
-      <aside className={`sidebar ${open ? "sidebar-open" : ""}`} aria-label="Main navigation">
-        <div className="brand"><strong>CogniVit<span>.ai</span></strong><small>AROS · AUTONOMOUS REVENUE OS</small></div>
-        <nav>
-          {navItems.map((item, index) => (
-            <button key={item} className={`nav-item ${index === 0 ? "active" : ""}`} aria-current={index === 0 ? "page" : undefined} onClick={index === 0 ? onClose : undefined}>
-              <Glyph>{["⌁", "✣", "▣", "◇", "⌁", "↗", "◎", "⚙"][index]}</Glyph>{item}
-            </button>
-          ))}
-        </nav>
-        <div className="system-status"><span><i /> LIVE SYSTEM</span><small>214 accounts monitored</small></div>
-      </aside>
-    </>
-  );
-}
+function Dialog({title,children,onClose,wide=false}:{title:string;children:React.ReactNode;onClose:()=>void;wide?:boolean}) { const titleId=useId();const ref=useRef<HTMLDivElement>(null);useEffect(()=>{const previous=document.activeElement instanceof HTMLElement?document.activeElement:null;ref.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();if(event.key==="Tab"&&ref.current){const nodes=[...ref.current.querySelectorAll<HTMLElement>('button,textarea,[tabindex]:not([tabindex="-1"])')].filter((node)=>!node.hasAttribute("disabled"));if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}};document.addEventListener("keydown",key);document.body.style.overflow="hidden";return()=>{document.removeEventListener("keydown",key);document.body.style.overflow="";previous?.focus();};},[onClose]);return <div className="dialog-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)onClose();}}><div ref={ref} className={`dialog ${wide?"dialog-wide":""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><div className="dialog-header"><div><span className="eyebrow">GOVERNED DECISION</span><h2 id={titleId}>{title}</h2></div><button className="close-button" onClick={onClose} aria-label={`Close ${title}`}>×</button></div>{children}</div></div>; }
+function ActionRow({decision,onStatus,onEdit,onExecute}:{decision:GovernedDecision;onStatus:(status:DecisionStatus)=>void;onEdit:()=>void;onExecute:()=>void}) { return <div className="action-row">{decision.status==="ready-for-execution"?<button className="action-button action-approve" onClick={onExecute} aria-label="Simulate execution">Simulate execution</button>:<button className="action-button action-approve" onClick={()=>onStatus("approved")} aria-label="Approve">Approve</button>}<button className="action-button" onClick={onEdit} aria-label="Edit recommendation">Edit</button><button className="action-button" onClick={()=>onStatus("snoozed")} aria-label="Snooze">Snooze</button><button className="action-button action-dismiss" onClick={()=>onStatus("dismissed")} aria-label="Dismiss">Dismiss</button></div>; }
+function EditRecommendation({value,onSave,onCancel}:{value:string;onSave:(value:string)=>void;onCancel:()=>void}) { const [draft,setDraft]=useState(value);return <div className="edit-box"><label htmlFor="recommendation-edit">Edit recommendation</label><textarea id="recommendation-edit" autoFocus value={draft} onChange={(event)=>setDraft(event.target.value)}/><div><button className="secondary-button" onClick={onCancel}>Cancel</button><button className="primary-button" disabled={!draft.trim()} onClick={()=>onSave(draft.trim())}>Save recommendation</button></div></div>; }
+function IntelligenceCard({decision,onSelect}:{decision:GovernedDecision;onSelect:()=>void}) { return <button className="insight-card" onClick={onSelect} aria-label={`View details for ${decision.title}`}><div className="insight-top"><StatusPill tone={toneForPriority(decision.priority)}>{decision.priority.toUpperCase()}</StatusPill>{decision.status!=="pending"&&<StatusPill tone="slate">{label(decision.status)}</StatusPill>}<span className="open-arrow" aria-hidden="true">↗</span></div><h3>{decision.title}</h3><p>{decision.summary}</p><strong className={`impact tone-text-${toneForPriority(decision.priority)}`}>{decision.responsibleAgent} · {decision.verifiedBusinessImpact}</strong></button>; }
+function IntelligenceFeed({decisions,onSelect}:{decisions:GovernedDecision[];onSelect:(id:string)=>void}) { return <section className="panel feed-panel" aria-labelledby="feed-title"><div className="section-heading"><div><h2 id="feed-title">AI Intelligence Feed</h2><p>Governed and ranked by business impact · Updated 8:02 AM</p></div><span className="analysis-label"><i/> Control checks complete</span></div>{decisions.length?decisions.map((decision)=><IntelligenceCard key={decision.id} decision={decision} onSelect={()=>onSelect(decision.id)}/>):<div className="feed-state"><strong>You’re all caught up</strong><p>No governed decisions require attention.</p></div>}</section>; }
 
-function PageHeader({ onMenu }: { onMenu: () => void }) {
-  return (
-    <header className="page-header">
-      <button className="menu-button" onClick={onMenu} aria-label="Open navigation"><span /><span /><span /></button>
-      <div><h1>Good Morning, Uphaar</h1><p>Your AI workforce analyzed the revenue organization overnight.</p></div>
-      <div className="avatar" aria-label="Uphaar Kotru profile">UK</div>
-    </header>
-  );
-}
+function DetailPanel({decision,onClose,onStatus,onEdit,onExecute}:{decision:GovernedDecision;onClose:()=>void;onStatus:(status:DecisionStatus)=>void;onEdit:(value:string)=>void;onExecute:()=>void}) { const [editing,setEditing]=useState(false);const impactChanged=!decision.impactVerification.accepted;return <Dialog title={decision.title} onClose={onClose}><div className="dialog-meta"><StatusPill tone={toneForPriority(decision.priority)}>{decision.priority.toUpperCase()} · {decision.priorityScore.toFixed(1)}</StatusPill><StatusPill tone="slate">{label(decision.status)}</StatusPill></div><dl className="detail-grid"><div><dt>Account</dt><dd>{decision.accountName}</dd></div><div><dt>Category</dt><dd>{decision.category}</dd></div><div className="full"><dt>What happened</dt><dd>{decision.whatHappened}</dd></div><div className="full"><dt>Why it matters</dt><dd>{decision.whyItMatters}</dd></div><div className="full"><dt>Verified evidence</dt><dd><ul>{decision.evidence.map((item)=><li key={item.id}><strong>{item.source}</strong> · {item.title} ({Math.round(item.reliability*100)}%)</li>)}</ul></dd></div><div><dt>Verified impact</dt><dd>{decision.verifiedBusinessImpact}</dd></div><div><dt>Proposed impact</dt><dd>{decision.proposedBusinessImpact}{impactChanged&&<StatusPill tone="amber"> Adjusted</StatusPill>}</dd></div><div className="full"><dt>Confidence assessment</dt><dd><span className="confidence"><i style={{width:`${decision.confidence*100}%`}}/></span>{Math.round(decision.confidence*100)}% · Evidence {Math.round(decision.confidenceAssessment.evidenceConfidence*100)}% · Corroboration {Math.round(decision.confidenceAssessment.corroborationScore*100)}%</dd></div><div className="full"><dt>Priority scoring breakdown</dt><dd className="score-list">{Object.entries(decision.scoringBreakdown).map(([key,value])=><span key={key}>{label(key)}: {value.toFixed(1)}</span>)}</dd></div><div className="full"><dt>Approval policy</dt><dd>{decision.approvalPolicy.reason} Role: {decision.approvalPolicy.requiredRole}; approvers: {decision.approvalPolicy.minimumApprovers}.</dd></div><div><dt>Responsible AI agent</dt><dd>{decision.responsibleAgent}</dd></div><div><dt>Execution mode</dt><dd>{label(decision.executionPolicy.mode)} (simulation only)</dd></div>{decision.governanceFlags.length>0&&<div className="full"><dt>Governance warnings</dt><dd className="flag-list">{decision.governanceFlags.map((flag)=><StatusPill key={flag} tone="amber">{label(flag)}</StatusPill>)}</dd></div>}</dl>{editing?<EditRecommendation value={decision.recommendedAction} onCancel={()=>setEditing(false)} onSave={(value)=>{onEdit(value);setEditing(false);}}/>:<div className="recommendation"><span className="recommendation-icon">✦</span><div><h3>Recommended next action</h3><p>{decision.recommendedAction}</p></div></div>} {!editing&&decision.status!=="executed"&&<ActionRow decision={decision} onStatus={onStatus} onEdit={()=>setEditing(true)} onExecute={onExecute}/>}</Dialog>; }
+function QueueCard({metrics,onOpen}:{metrics:ReturnType<typeof queueMetrics>;onOpen:()=>void}) { return <section className="panel decision-card"><span className="queue-icon">◇</span><h2>Decisions awaiting you</h2><strong className="decision-count">{metrics.count}</strong><p>{metrics.highImpactCount} high impact · {money(metrics.influencedRevenue)} influenced</p><button className="primary-button full-button" onClick={onOpen}>Review decision queue <span aria-hidden="true">→</span></button></section>; }
+function WorkforceCard(){return <section className="panel workforce-card"><div className="section-heading"><div><h2>AI Workforce</h2><p>Autonomous agents · Live</p></div><span className="workforce-live"><i/></span></div><div>{agentStatuses.map((agent)=><div className="agent-row" key={agent.id}><span className={`agent-icon agent-${agent.status.toLowerCase()}`}>✦</span><div><strong>{agent.name}</strong><small>{agent.detail}</small></div><StatusPill tone={agent.status==="Processing"?"amber":"green"}>{agent.status}</StatusPill></div>)}</div></section>}
+function DecisionItem({decision,onOpen}:{decision:GovernedDecision;onOpen:()=>void}) { return <article className="decision-item"><div className="decision-item-head"><div><span>{decision.accountName}</span><h3>{decision.title}</h3></div><div><StatusPill tone={toneForPriority(decision.priority)}>{decision.priority} impact</StatusPill><StatusPill tone="slate">{label(decision.status)}</StatusPill></div></div><strong className="decision-impact">{decision.verifiedBusinessImpact}</strong><p>{decision.recommendedAction}</p><button className="secondary-button" onClick={onOpen} aria-label={`Review ${decision.title}`}>Review decision</button></article>; }
+function QueuePanel({decisions,metrics,onClose,onSelect}:{decisions:GovernedDecision[];metrics:ReturnType<typeof queueMetrics>;onClose:()=>void;onSelect:(id:string)=>void}) { return <Dialog title="Decision queue" onClose={onClose} wide><div className="queue-summary"><strong>{metrics.count} decisions</strong><span>{metrics.highImpactCount} high impact</span><span>{money(metrics.influencedRevenue)} influenced</span></div><div className="decision-list">{decisions.map((decision)=><DecisionItem key={decision.id} decision={decision} onOpen={()=>onSelect(decision.id)}/>)}</div></Dialog>; }
+function Diagnostics(){const d=decisionControlResult.diagnostics;return <details className="diagnostics"><summary>Decision control diagnostics</summary><dl>{Object.entries(d).map(([key,value])=><div key={key}><dt>{label(key)}</dt><dd>{value}</dd></div>)}</dl><h3>Rejected candidates</h3>{decisionControlResult.rejectedCandidates.map((item)=><p key={item.candidateId}>{item.candidateId}: {item.issues.map((issue)=>issue.code).join(", ")}</p>)}</details>}
 
-function StatusPill({ children, tone = "blue" }: { children: React.ReactNode; tone?: Tone | "slate" }) {
-  return <span className={`status-pill tone-${tone}`}>{children}</span>;
-}
-
-function MetricCard({ label, value, indicator, tone }: { label: string; value: string; indicator: string; tone: Tone }) {
-  return <article className="metric-card" tabIndex={0}><p>{label}</p><strong>{value}</strong><StatusPill tone={tone}>{indicator}</StatusPill></article>;
-}
-
-function ActionButton({ action, onClick }: { action: "Approve" | "Edit recommendation" | "Dismiss" | "Snooze"; onClick: () => void }) {
-  const short = action === "Edit recommendation" ? "Edit" : action;
-  return <button className={`action-button action-${short.toLowerCase()}`} onClick={onClick} aria-label={action}>{short}</button>;
-}
-
-function ActionRow({ onStatus, onEdit }: { onStatus: (status: ItemStatus) => void; onEdit: () => void }) {
-  return <div className="action-row"><ActionButton action="Approve" onClick={() => onStatus("Approved")} /><ActionButton action="Edit recommendation" onClick={onEdit} /><ActionButton action="Snooze" onClick={() => onStatus("Snoozed")} /><ActionButton action="Dismiss" onClick={() => onStatus("Dismissed")} /></div>;
-}
-
-function priorityTone(priority: Priority): Tone { return priority === "Critical" || priority === "High" ? "red" : priority === "Opportunity" ? "green" : "blue"; }
-
-function IntelligenceCard({ insight, onSelect }: { insight: RevenueInsight; onSelect: () => void }) {
-  return (
-    <button className="insight-card" onClick={onSelect} aria-label={`View details for ${insight.title}`}>
-      <div className="insight-top"><StatusPill tone={priorityTone(insight.priority)}>{insight.priority.toUpperCase()}</StatusPill>{insight.status !== "Pending" && <StatusPill tone="slate">{insight.status}</StatusPill>}<span className="open-arrow" aria-hidden="true">↗</span></div>
-      <h3>{insight.title}</h3><p>{insight.summary}</p>
-      <strong className={`impact tone-text-${priorityTone(insight.priority)}`}>{insight.agent} · {insight.businessImpact}</strong>
-    </button>
-  );
-}
-
-function IntelligenceFeed({ insights, state, onSelect, onRetry }: { insights: RevenueInsight[]; state: "ready" | "loading" | "error"; onSelect: (id: string) => void; onRetry: () => void }) {
-  return (
-    <section className="panel feed-panel" aria-labelledby="feed-title">
-      <div className="section-heading"><div><h2 id="feed-title">AI Intelligence Feed</h2><p>Ranked by business impact · Updated 8:02 AM</p></div><span className="analysis-label"><i /> Analysis complete</span></div>
-      {state === "loading" && <div className="feed-state" role="status"><span className="spinner" />Analyzing overnight signals…</div>}
-      {state === "error" && <div className="feed-state" role="alert"><strong>Intelligence feed unavailable</strong><p>We couldn’t load the latest analysis.</p><button onClick={onRetry}>Try again</button></div>}
-      {state === "ready" && insights.length === 0 && <div className="feed-state"><strong>You’re all caught up</strong><p>No new intelligence items require attention.</p></div>}
-      {state === "ready" && insights.map((insight) => <IntelligenceCard key={insight.id} insight={insight} onSelect={() => onSelect(insight.id)} />)}
-    </section>
-  );
-}
-
-function Dialog({ title, children, onClose, wide = false }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
-  const titleId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const dialog = dialogRef.current;
-    dialog?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
-      if (event.key === "Tab" && dialog) {
-        const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button, textarea, [tabindex]:not([tabindex="-1"])')).filter((node) => !node.hasAttribute("disabled"));
-        if (!focusable.length) return;
-        const first = focusable[0]; const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKeyDown); document.body.style.overflow = ""; previous?.focus(); };
-  }, [onClose]);
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div ref={dialogRef} className={`dialog ${wide ? "dialog-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><div className="dialog-header"><div><span className="eyebrow">AI RECOMMENDATION</span><h2 id={titleId}>{title}</h2></div><button className="close-button" onClick={onClose} aria-label={`Close ${title}`}>×</button></div>{children}</div></div>;
-}
-
-function EditableRecommendation({ value, editing, onSave, onCancel }: { value: string; editing: boolean; onSave: (value: string) => void; onCancel: () => void }) {
-  const [draft, setDraft] = useState(value);
-  if (!editing) return <div className="recommendation"><span className="recommendation-icon">✦</span><div><h3>Recommended next action</h3><p>{value}</p></div></div>;
-  return <div className="edit-box"><label htmlFor="recommendation-edit">Edit recommendation</label><textarea id="recommendation-edit" autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} /><div><button className="secondary-button" onClick={onCancel}>Cancel</button><button className="primary-button" onClick={() => onSave(draft.trim())} disabled={!draft.trim()}>Save recommendation</button></div></div>;
-}
-
-function InsightDetailPanel({ insight, onClose, onStatus, onEdit }: { insight: RevenueInsight; onClose: () => void; onStatus: (status: ItemStatus) => void; onEdit: (recommendation: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  return <Dialog title={insight.title} onClose={onClose}><div className="dialog-meta"><StatusPill tone={priorityTone(insight.priority)}>{insight.priority}</StatusPill><StatusPill tone="slate">{insight.status}</StatusPill></div><dl className="detail-grid"><div><dt>Account name</dt><dd>{insight.account}</dd></div><div><dt>Signal category</dt><dd>{insight.category}</dd></div><div className="full"><dt>What happened</dt><dd>{insight.whatHappened}</dd></div><div className="full"><dt>Why it matters</dt><dd>{insight.whyItMatters}</dd></div><div className="full"><dt>Supporting evidence</dt><dd><ul>{insight.evidence.map((evidence) => <li key={evidence}>{evidence}</li>)}</ul></dd></div><div><dt>Business impact</dt><dd>{insight.businessImpact}</dd></div><div><dt>Confidence score</dt><dd><span className="confidence"><i style={{ width: `${insight.confidence}%` }} /> </span>{insight.confidence}%</dd></div><div><dt>Responsible AI agent</dt><dd>{insight.agent}</dd></div></dl><EditableRecommendation key={`${editing}-${insight.recommendedAction}`} value={insight.recommendedAction} editing={editing} onCancel={() => setEditing(false)} onSave={(value) => { onEdit(value); setEditing(false); }} />{!editing && <ActionRow onStatus={onStatus} onEdit={() => setEditing(true)} />}</Dialog>;
-}
-
-function DecisionQueueCard({ onOpen }: { onOpen: () => void }) {
-  return <section className="panel decision-card"><span className="queue-icon">◇</span><h2>Decisions awaiting you</h2><strong className="decision-count">8</strong><p>3 high impact · $25.6M influenced</p><button className="primary-button full-button" onClick={onOpen}>Review decision queue <span aria-hidden="true">→</span></button></section>;
-}
-
-function WorkforceCard() {
-  return <section className="panel workforce-card"><div className="section-heading"><div><h2>AI Workforce</h2><p>Autonomous agents · Live</p></div><span className="workforce-live"><i /></span></div><div>{agentStatuses.map((agent) => <div className="agent-row" key={agent.id}><span className={`agent-icon agent-${agent.status.toLowerCase()}`}>✦</span><div><strong>{agent.name}</strong><small>{agent.detail}</small></div><StatusPill tone={agent.status === "Processing" ? "amber" : "green"}>{agent.status}</StatusPill></div>)}</div></section>;
-}
-
-function DecisionItem({ decision, onStatus, onEdit }: { decision: Decision; onStatus: (status: ItemStatus) => void; onEdit: (recommendation: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(decision.recommendation);
-  return <article className="decision-item"><div className="decision-item-head"><div><span>{decision.account}</span><h3>{decision.title}</h3></div><div><StatusPill tone={decision.priority === "High" ? "red" : "blue"}>{decision.priority} impact</StatusPill><StatusPill tone="slate">{decision.status}</StatusPill></div></div><strong className="decision-impact">{decision.businessImpact}</strong>{editing ? <div className="inline-edit"><label htmlFor={`edit-${decision.id}`}>Edit recommendation for {decision.account}</label><textarea id={`edit-${decision.id}`} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus /><button className="secondary-button" onClick={() => setEditing(false)}>Cancel</button><button className="primary-button" onClick={() => { onEdit(draft); setEditing(false); }}>Save</button></div> : <p>{decision.recommendation}</p>} {!editing && <ActionRow onStatus={onStatus} onEdit={() => setEditing(true)} />}</article>;
-}
-
-function DecisionQueuePanel({ decisions, onClose, onStatus, onEdit }: { decisions: Decision[]; onClose: () => void; onStatus: (id: string, status: ItemStatus) => void; onEdit: (id: string, value: string) => void }) {
-  return <Dialog title="Decision queue" onClose={onClose} wide><div className="queue-summary"><strong>8 decisions</strong><span>3 high impact</span><span>$25.6M influenced</span></div><div className="decision-list">{decisions.map((decision) => <DecisionItem key={decision.id} decision={decision} onStatus={(status) => onStatus(decision.id, status)} onEdit={(value) => onEdit(decision.id, value)} />)}</div></Dialog>;
-}
-
-export function MorningBriefingDashboard() {
-  const [state, dispatch] = useReducer(briefingReducer, { insights: initialInsights, decisions: initialDecisions });
-  const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
-  const [queueOpen, setQueueOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const [feedState, setFeedState] = useState<"ready" | "loading" | "error">("ready");
-  const hydrated = useRef(false);
-
-  useEffect(() => {
-    try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) { const parsed = JSON.parse(saved) as typeof state; parsed.insights.forEach((item) => { if (item.status !== "Pending") dispatch({ type: "set-insight-status", id: item.id, status: item.status }); dispatch({ type: "edit-insight", id: item.id, recommendation: item.recommendedAction }); }); parsed.decisions.forEach((item) => { if (item.status !== "Pending") dispatch({ type: "set-decision-status", id: item.id, status: item.status }); dispatch({ type: "edit-decision", id: item.id, recommendation: item.recommendation }); }); } } catch { localStorage.removeItem(STORAGE_KEY); } finally { hydrated.current = true; }
-  }, []);
-  useEffect(() => { if (hydrated.current) localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }, [state]);
-  useEffect(() => { if (!feedback) return; const timeout = window.setTimeout(() => setFeedback(""), 3500); return () => window.clearTimeout(timeout); }, [feedback]);
-
-  const selectedInsight = state.insights.find((item) => item.id === selectedInsightId);
-  const updateInsightStatus = (status: ItemStatus) => { if (!selectedInsightId) return; dispatch({ type: "set-insight-status", id: selectedInsightId, status }); setFeedback(`${selectedInsight?.account} insight ${status.toLowerCase()}.`); };
-  const updateDecisionStatus = (id: string, status: ItemStatus) => { dispatch({ type: "set-decision-status", id, status }); const decision = state.decisions.find((item) => item.id === id); setFeedback(`${decision?.account} decision ${status.toLowerCase()}.`); };
-
-  return <div className="app-shell"><AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><main className="main-content"><PageHeader onMenu={() => setSidebarOpen(true)} /><section className="metrics-grid" aria-label="Morning metrics">{morningMetrics.map((metric) => <MetricCard key={metric.id} {...metric} />)}</section><div className="dashboard-grid"><IntelligenceFeed insights={state.insights} state={feedState} onSelect={setSelectedInsightId} onRetry={() => { setFeedState("loading"); window.setTimeout(() => setFeedState("ready"), 450); }} /><aside className="right-rail"><DecisionQueueCard onOpen={() => setQueueOpen(true)} /><WorkforceCard /></aside></div><div className="prototype-controls" aria-label="Demo feed states"><button onClick={() => setFeedState("loading")}>Loading state</button><button onClick={() => setFeedState("error")}>Error state</button><button onClick={() => setFeedState("ready")}>Reset feed</button></div></main>{selectedInsight && <InsightDetailPanel insight={selectedInsight} onClose={() => setSelectedInsightId(null)} onStatus={updateInsightStatus} onEdit={(recommendation) => { dispatch({ type: "edit-insight", id: selectedInsight.id, recommendation }); setFeedback("Recommendation updated."); }} />}{queueOpen && <DecisionQueuePanel decisions={state.decisions} onClose={() => setQueueOpen(false)} onStatus={updateDecisionStatus} onEdit={(id, recommendation) => { dispatch({ type: "edit-decision", id, recommendation }); setFeedback("Decision recommendation updated."); }} />}<div className="toast" aria-live="polite" aria-atomic="true">{feedback}</div></div>;
-}
+function isRecord(value:unknown):value is Record<string,unknown> { return Boolean(value&&typeof value==="object"&&!Array.isArray(value)); }
+function validHumanState(value:unknown):value is HumanStateMap { return isRecord(value)&&!Array.isArray(value.insights)&&!Array.isArray(value.decisions); }
+function migrateLegacyState(value:unknown):HumanStateMap { if(!isRecord(value)||!Array.isArray(value.insights))return {};const migrated:HumanStateMap={};for(const item of value.insights){if(!isRecord(item)||typeof item.id!=="string")continue;const decision=governedDecisions.find((entry)=>entry.candidateId===item.id);if(!decision)continue;const legacyStatus=typeof item.status==="string"?item.status.toLowerCase():"pending";const status:DecisionStatus=legacyStatus==="approved"?"ready-for-execution":legacyStatus==="dismissed"?"dismissed":legacyStatus==="snoozed"?"snoozed":"pending";migrated[decision.id]={status,editedRecommendation:typeof item.recommendedAction==="string"&&item.recommendedAction!==decision.recommendedAction?item.recommendedAction:undefined,auditEvents:[]};}return migrated; }
+export function MorningBriefingDashboard(){const [humanState,dispatch]=useReducer(humanWorkflowReducer,{});const [selectedId,setSelectedId]=useState<string|null>(null);const [queueOpen,setQueueOpen]=useState(false);const [sidebarOpen,setSidebarOpen]=useState(false);const [feedback,setFeedback]=useState("");const hydrated=useRef(false);useEffect(()=>{try{const saved=localStorage.getItem(STORAGE_KEY);if(saved){const parsed:unknown=JSON.parse(saved);if(validHumanState(parsed))dispatch({type:"hydrate",state:parsed});}else{const legacy=localStorage.getItem(LEGACY_STORAGE_KEY);if(legacy)dispatch({type:"hydrate",state:migrateLegacyState(JSON.parse(legacy) as unknown)});}}catch{localStorage.removeItem(STORAGE_KEY);}finally{hydrated.current=true;}},[]);useEffect(()=>{if(hydrated.current)localStorage.setItem(STORAGE_KEY,JSON.stringify(humanState));},[humanState]);useEffect(()=>{if(!feedback)return;const timeout=window.setTimeout(()=>setFeedback(""),3500);return()=>window.clearTimeout(timeout);},[feedback]);const decisions=useMemo(()=>governedDecisions.map((decision)=>mergeHumanState(decision,humanState[decision.id])),[humanState]);const feed=intelligenceFeed(decisions);const queue=decisionQueue(decisions);const metrics=queueMetrics(decisions,defaultDecisionControlPolicy.highImpactThreshold);const selected=decisions.find((decision)=>decision.id===selectedId);const update=(decision:GovernedDecision,status:DecisionStatus)=>{dispatch({type:"set-status",decision,status,now:now()});setFeedback(`${decision.accountName} decision ${status}.`);};const diagnostics=process.env.NODE_ENV!=="production"&&typeof window!=="undefined"&&new URLSearchParams(window.location.search).get("diagnostics")==="1";return <div className="app-shell"><AppSidebar open={sidebarOpen} onClose={()=>setSidebarOpen(false)}/><main className="main-content"><PageHeader onMenu={()=>setSidebarOpen(true)}/><section className="metrics-grid" aria-label="Morning metrics">{morningMetrics.map((metric)=><MetricCard key={metric.id} metric={metric}/>)}</section><div className="dashboard-grid"><IntelligenceFeed decisions={feed} onSelect={setSelectedId}/><aside className="right-rail"><QueueCard metrics={metrics} onOpen={()=>setQueueOpen(true)}/><WorkforceCard/></aside></div>{activeDecisions(decisions).length===0&&<div className="feed-state"><strong>No accepted decisions</strong><p>The control layer has no active governed decisions.</p></div>}{diagnostics&&<Diagnostics/>}</main>{queueOpen&&<QueuePanel decisions={queue} metrics={metrics} onClose={()=>setQueueOpen(false)} onSelect={(id)=>{setQueueOpen(false);setSelectedId(id);}}/>}{selected&&<DetailPanel decision={selected} onClose={()=>setSelectedId(null)} onStatus={(status)=>update(selected,status)} onEdit={(recommendation)=>{dispatch({type:"edit",decision:selected,recommendation,now:now()});setFeedback("Recommendation updated.");}} onExecute={()=>{dispatch({type:"execute",decision:selected,now:now()});setFeedback("Execution simulated and audited.");}}/>}<div className="toast" aria-live="polite">{feedback}</div></div>}

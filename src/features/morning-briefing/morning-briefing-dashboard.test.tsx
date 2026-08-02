@@ -25,14 +25,14 @@ describe("MorningBriefingDashboard", () => {
     render(<MorningBriefingDashboard />);
     const dialog = await openCoinbase();
     expect(within(dialog).getByText("$22.4M ARR at risk")).toBeVisible();
-    expect(within(dialog).getByText("94%")).toBeVisible();
+    expect(within(dialog).getByText(/95% · Evidence/)).toBeVisible();
   });
 
   it("approves an insight", async () => {
     render(<MorningBriefingDashboard />);
     const dialog = await openCoinbase();
     await userEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
-    expect(within(dialog).getByText("Approved")).toBeVisible();
+    expect(within(dialog).getByText("Ready For Execution")).toBeVisible();
   });
 
   it("edits and saves an insight recommendation", async () => {
@@ -84,6 +84,21 @@ describe("MorningBriefingDashboard", () => {
     const approve = within(dialog).getByRole("button", { name: "Approve" });
     approve.focus();
     await user.keyboard(" ");
-    expect(within(dialog).getByText("Approved")).toBeVisible();
+    expect(within(dialog).getByText("Ready For Execution")).toBeVisible();
+  });
+
+  it("shows dynamic queue metrics from governed decisions", async () => {
+    render(<MorningBriefingDashboard />);
+    expect(screen.getByText("8")).toBeVisible();
+    expect(screen.getByText(/high impact · .* influenced/i)).toBeVisible();
+  });
+
+  it("simulates execution after approval", async () => {
+    render(<MorningBriefingDashboard />);
+    const dialog = await openCoinbase();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Simulate execution" }));
+    expect(within(dialog).getByText("Executed")).toBeVisible();
+    expect(screen.getByText("Execution simulated and audited.")).toBeVisible();
   });
 });
