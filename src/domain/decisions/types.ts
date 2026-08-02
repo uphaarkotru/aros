@@ -3,7 +3,7 @@ import type { EvidenceItem } from "@/domain/evidence/types";
 export type DecisionType = "renewal-risk" | "expansion-opportunity" | "meeting-preparation" | "relationship-risk" | "forecast-risk" | "executive-action";
 export type DecisionPriority = "critical" | "high" | "medium" | "low";
 export type DecisionStatus = "pending" | "approved" | "edited" | "dismissed" | "snoozed" | "ready-for-execution" | "executed" | "failed" | "expired";
-export type GovernanceFlag = "unverified-evidence" | "impact-mismatch" | "low-confidence" | "stale-evidence" | "insufficient-corroboration" | "duplicate-candidate" | "executive-approval-required" | "external-execution-blocked" | "incomplete-account-context";
+export type GovernanceFlag = "unverified-evidence" | "impact-mismatch" | "low-confidence" | "stale-evidence" | "insufficient-corroboration" | "duplicate-candidate" | "executive-approval-required" | "external-execution-blocked" | "incomplete-account-context" | "critical-source-conflict" | "unsupported-authoritative-fact";
 export type ActorType = "ai-agent" | "decision-control" | "human" | "system";
 export type AuditEventType = "candidate-created" | "validation-passed" | "validation-failed" | "evidence-verified" | "impact-adjusted" | "confidence-adjusted" | "priority-assigned" | "duplicate-merged" | "approval-required" | "approved" | "edited" | "dismissed" | "snoozed" | "ready-for-execution" | "executed" | "execution-failed";
 

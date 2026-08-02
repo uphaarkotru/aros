@@ -21,4 +21,9 @@ export interface AccountContext {
   activeRisks?: string[];
   dataQualityScore?: number;
   provenanceSourceIds?: string[];
+  reconciliationConfidence?: number;
+  staleFactCount?: number;
+  criticalConflictCount?: number;
+  unsupportedFactCount?: number;
+  humanVerifiedFactIds?: string[];
 }

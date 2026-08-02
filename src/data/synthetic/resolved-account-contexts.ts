@@ -1,0 +1,6 @@
+import { buildResolvedAccountContext } from "@/evidence-reconciliation";import type { HumanFactOverride } from "@/domain/reconciliation/types";import { syntheticSourceBundles } from "./account-source-records";import { syntheticReconciliationRecords } from "./reconciliation-source-records";
+export const reconciliationNow="2026-08-01T15:02:00.000Z";
+export const syntheticHumanOverrides:HumanFactOverride[]=[{id:"override-ft-title",accountId:"acct-franklin",factType:"stakeholder-title",fieldPath:"stakeholders.ft-ch.title",value:"SVP Enterprise Data",createdBy:"revenue-leader-1",createdAt:"2026-07-31T16:00:00.000Z",reason:"Verified directly with the stakeholder",evidenceIds:["ft-email-contact"],status:"active",supersedesFactIds:[],auditTrail:["Created by revenue-leader-1 at 2026-07-31T16:00:00.000Z"]}];
+const accountIds=syntheticSourceBundles.map(b=>b.account.Id);
+export const resolvedAccountContexts=Object.fromEntries(accountIds.map(accountId=>[accountId,buildResolvedAccountContext({accountId,records:syntheticReconciliationRecords,overrides:syntheticHumanOverrides.filter(o=>o.accountId===accountId),accountIds,now:reconciliationNow})]));
+export function getResolvedAccountContext(accountId:string){return resolvedAccountContexts[accountId];}

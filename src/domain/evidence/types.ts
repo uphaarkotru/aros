@@ -1,4 +1,4 @@
-export type EvidenceSource = "salesforce" | "gong" | "email" | "calendar" | "product-usage" | "support" | "external-news" | "manual" | "synthetic";
+export type EvidenceSource = "salesforce" | "gong" | "email" | "calendar" | "product-usage" | "support" | "contract-system" | "external-news" | "manual" | "synthetic";
 
 export interface EvidenceItem {
   id: string;

@@ -1,6 +1,7 @@
 import type { GovernedDecision } from "@/domain/decisions/types";
 import type { EvidenceItem, EvidenceSource } from "@/domain/evidence/types";
 import type { StrategicTier } from "./types";
+import type { ResolvedAccountContext } from "@/domain/reconciliation/types";
 
 export type Trend = "improving"|"stable"|"declining"|"unknown";
 export type HealthStatus = "healthy"|"watch"|"at-risk"|"critical"|"unknown";
@@ -29,4 +30,4 @@ export interface SnapshotChange { field:string;previous:string|number;current:st
 export interface SnapshotSummary { previous?:AccountSnapshot;current:AccountSnapshot;changes:SnapshotChange[]; }
 export interface TimelineEvent { id:string;accountId:string;category:"engagement"|"commercial"|"product"|"support"|"decisions";type:ActivityType;title:string;summary:string;occurredAt:string;source:string;sourceId:string; }
 export interface OpenAction { id:string;title:string;owner:string;dueAt:string;status:"open"|"complete";sourceId:string; }
-export interface AccountDigitalTwin { accountId:string;generatedAt:string;asOf:string;identity:AccountIdentity;commercialProfile:CommercialProfile;stakeholders:Stakeholder[];stakeholderMap:StakeholderMap;opportunities:Opportunity[];renewalProfile:RenewalProfile|null;productUsage:ProductUsageSummary[];recentActivities:AccountActivity[];fullTimeline:TimelineEvent[];strategicInitiatives:StrategicInitiative[];meddpicc:MEDDPICCProfile;health:AccountHealth;evidence:EvidenceItem[];activeDecisions:GovernedDecision[];historicalDecisions:GovernedDecision[];openActions:OpenAction[];knownRisks:string[];expansionSignals:string[];unresolvedQuestions:string[];dataQuality:DataQualityAssessment;snapshotSummary:SnapshotSummary;sourceCoverage:SourceCoverage[];provenance:ProvenanceRecord[]; }
+export interface AccountDigitalTwin { accountId:string;generatedAt:string;asOf:string;identity:AccountIdentity;commercialProfile:CommercialProfile;stakeholders:Stakeholder[];stakeholderMap:StakeholderMap;opportunities:Opportunity[];renewalProfile:RenewalProfile|null;productUsage:ProductUsageSummary[];recentActivities:AccountActivity[];fullTimeline:TimelineEvent[];strategicInitiatives:StrategicInitiative[];meddpicc:MEDDPICCProfile;health:AccountHealth;evidence:EvidenceItem[];activeDecisions:GovernedDecision[];historicalDecisions:GovernedDecision[];openActions:OpenAction[];knownRisks:string[];expansionSignals:string[];unresolvedQuestions:string[];dataQuality:DataQualityAssessment;snapshotSummary:SnapshotSummary;sourceCoverage:SourceCoverage[];provenance:ProvenanceRecord[];reconciliation?:ResolvedAccountContext; }

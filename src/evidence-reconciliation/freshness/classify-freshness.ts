@@ -1,0 +1,4 @@
+import type { AccountFact,FactType } from "@/domain/facts/types";import type { FreshnessStatus } from "@/domain/reconciliation/types";import { freshnessPolicy } from "../config";
+export function classifyFreshness(fact:Pick<AccountFact,"factType"|"observedAt"|"source">,now:string):FreshnessStatus{const age=Date.parse(now)-Date.parse(fact.observedAt);if(!Number.isFinite(age)||age<0)return"unknown";const p=freshnessPolicy(fact.factType),staleAfter=p.sourceOverrides?.[fact.source]??p.staleAfter;if(p.expireAfter!==undefined&&age>p.expireAfter)return"expired";if(age>staleAfter)return"stale";if(age>p.agingAfter)return"aging";return"fresh";}
+export function freshnessScore(status:FreshnessStatus){return status==="fresh"?1:status==="aging"?.7:status==="stale"?.35:status==="expired"?.05:.4;}
+export function isFactFresh(type:FactType,observedAt:string,now:string){return ["fresh","aging"].includes(classifyFreshness({factType:type,observedAt,source:"synthetic"},now));}

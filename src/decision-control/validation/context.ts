@@ -3,7 +3,7 @@ import type { DecisionCandidate, GovernanceFlag, ValidationIssue } from "@/domai
 import type { EvidenceItem, EvidenceSource } from "@/domain/evidence/types";
 import type { DecisionControlPolicy } from "../types";
 
-const authoritativeSources: EvidenceSource[] = ["salesforce", "gong", "product-usage", "support", "calendar"];
+const authoritativeSources: EvidenceSource[] = ["salesforce", "gong", "product-usage", "support", "calendar", "contract-system"];
 const error = (code: string, field: string, message: string): ValidationIssue => ({ code, field, message, severity: "error" });
 const warning = (code: string, field: string, message: string): ValidationIssue => ({ code, field, message, severity: "warning" });
 
@@ -13,6 +13,9 @@ export function validateContext(candidate: DecisionCandidate, accounts: readonly
   if (!account) return { errors: [error("unknown-account", "accountId", "Referenced account does not exist.")], warnings, flags, evidence: [] as EvidenceItem[], account: undefined };
   if (account.accountStatus !== "active") errors.push(error("inactive-account", "accountId", "Account is not active."));
   if (!Number.isFinite(account.annualContractValue) || !Number.isFinite(account.openOpportunityValue)) errors.push(error("missing-authoritative-financials", "accountId", "Authoritative financial context is missing."));
+  if ((account.criticalConflictCount??0)>0) { warnings.push(warning("critical-source-conflict","accountId","Authoritative account evidence has a critical unresolved conflict.")); flags.push("critical-source-conflict"); }
+  if ((account.unsupportedFactCount??0)>0) { warnings.push(warning("unsupported-authoritative-fact","accountId","Some account facts have insufficient reconciliation confidence.")); flags.push("unsupported-authoritative-fact"); }
+  if ((account.staleFactCount??0)>0) { warnings.push(warning("stale-account-facts","accountId","The reconciled account context contains stale facts.")); flags.push("stale-evidence"); }
   if (!account.executiveSponsor && ["renewal-risk", "executive-action"].includes(candidate.proposedType)) { warnings.push(warning("incomplete-account-context", "executiveSponsor", "Executive sponsor is not identified.")); flags.push("incomplete-account-context"); }
   const evidence: EvidenceItem[] = [];
   for (const id of candidate.evidenceIds) {

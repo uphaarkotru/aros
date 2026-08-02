@@ -12,6 +12,7 @@ export function assessConfidence(candidate: DecisionCandidate, account: AccountC
   const freshnessDays = policy.evidenceFreshnessDays[candidate.proposedType];
   const freshnessScore = evidence.length ? evidence.reduce((sum, item) => { const age = Math.max(0, (new Date(now).getTime() - new Date(item.observedAt).getTime()) / 86_400_000); return sum + clamp(1 - age / freshnessDays); }, 0) / evidence.length : 0;
   const authoritative = evidence.some((item) => ["salesforce", "gong", "product-usage", "support", "calendar"].includes(item.source)) ? 1 : 0;
-  const finalConfidence = clamp(candidate.proposedConfidence * 0.35 + evidenceConfidence * 0.25 + contextCompleteness * 0.15 + corroborationScore * 0.10 + freshnessScore * 0.10 + authoritative * 0.05);
+  const reconciliationConfidence=account.reconciliationConfidence??1, reconciliationFactor=reconciliationConfidence<.6?.9+.1*reconciliationConfidence:1, conflictPenalty=(account.criticalConflictCount??0)>0?.15:0, stalePenalty=Math.min(.12,(account.staleFactCount??0)*.02);
+  const finalConfidence = clamp((candidate.proposedConfidence * 0.35 + evidenceConfidence * 0.25 + contextCompleteness * 0.15 + corroborationScore * 0.10 + freshnessScore * 0.10 + authoritative * 0.05)*reconciliationFactor-conflictPenalty-stalePenalty);
   return { modelConfidence: candidate.proposedConfidence, evidenceConfidence, contextCompleteness, corroborationScore, freshnessScore, finalConfidence, explanation: "Deterministic blend of model assessment, evidence reliability, context completeness, corroboration, freshness, and authoritative support." };
 }
