@@ -1,0 +1,2 @@
+import {describe,it} from "vitest";
+describe.skipIf(process.env.AROS_RUN_LIVE_OPENAI_TEST!=="true")("live OpenAI development provider",()=>{it("is opt-in and executed through the server development action",{timeout:120000},async()=>{const {runRealCoinbaseRenewalAction}=await import("@/app/dev/provider-readiness/actions");const result=await runRealCoinbaseRenewalAction(true);if(!result.success)throw new Error(`Live provider flow failed closed at ${result.stage}: ${result.errors.map(item=>item.code).join(",")}`);});});

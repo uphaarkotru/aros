@@ -1,0 +1,3 @@
+export interface DevelopmentOpenAIRequest{model:string;instructions:string;input:{role:"developer"|"user";content:string}[];maxOutputTokens:number;temperature:number;schema:Record<string,unknown>;requestId:string;traceId:string;}
+export interface DevelopmentOpenAIResponse{id:string;model:string;status:"completed"|"failed"|"cancelled"|"incomplete";outputText:string;refusal?:string;finishReason:"stop"|"length"|"content-filter"|"error"|"unknown";usage?:{inputTokens:number;outputTokens:number;totalTokens:number};}
+export interface DevelopmentOpenAIClient{createResponse(request:DevelopmentOpenAIRequest,options:{signal?:AbortSignal;timeoutMs:number}):Promise<DevelopmentOpenAIResponse>;healthCheck(options:{signal?:AbortSignal;timeoutMs:number}):Promise<boolean>;}

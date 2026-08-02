@@ -1,0 +1,2 @@
+import type {DevelopmentOpenAIClient} from "@/llm-providers/openai-development/types";
+export function createDeterministicOpenAIClient(output:unknown,overrides:Partial<DevelopmentOpenAIClient>={}):DevelopmentOpenAIClient{return{async createResponse(request){return{id:`openai-fixture-${request.requestId}`,model:request.model,status:"completed",outputText:JSON.stringify(output),finishReason:"stop",usage:{inputTokens:100,outputTokens:200,totalTokens:300}};},async healthCheck(){return true;},...overrides};}

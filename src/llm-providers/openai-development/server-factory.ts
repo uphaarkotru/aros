@@ -1,0 +1,3 @@
+import "server-only";
+import type {ResolvedProviderCredential} from "@/domain/provider-readiness/types";import {accessResolvedSecret} from "@/llm-provider-readiness/credentials";import {createDevelopmentOpenAIProvider} from "./development-openai-provider";import {createOfficialOpenAIClient} from "./openai-client";
+export function createServerDevelopmentOpenAIProvider(credential:ResolvedProviderCredential){let provider:ReturnType<typeof createDevelopmentOpenAIProvider>|undefined;accessResolvedSecret(credential,secret=>{provider=createDevelopmentOpenAIProvider({client:createOfficialOpenAIClient(secret)});});if(!provider)throw new Error("Resolved provider credential is unavailable.");return provider;}
