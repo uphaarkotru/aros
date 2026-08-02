@@ -6,7 +6,7 @@ import type { DecisionControlPolicy } from "../types";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 export function assessConfidence(candidate: DecisionCandidate, account: AccountContext, evidence: readonly EvidenceItem[], policy: DecisionControlPolicy, now: string): ConfidenceAssessment {
   const evidenceConfidence = evidence.length ? evidence.reduce((sum, item) => sum + item.reliability, 0) / evidence.length : 0;
-  const completenessFields = [account.ownerId, account.renewalDate, account.currency, account.executiveSponsor];
+  const completenessFields = [account.ownerId, account.renewalDate, account.currency, account.executiveSponsor, account.dataQualityScore === undefined ? null : account.dataQualityScore, account.provenanceSourceIds?.length];
   const contextCompleteness = completenessFields.filter(Boolean).length / completenessFields.length;
   const corroborationScore = clamp(new Set(evidence.map((item) => item.source)).size / policy.minimumIndependentSources);
   const freshnessDays = policy.evidenceFreshnessDays[candidate.proposedType];

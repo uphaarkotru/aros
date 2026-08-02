@@ -1,0 +1,1 @@
+export const twinPolicy={staleDays:60,opportunityStagnationDays:45,healthWeights:{commercial:.15,relationship:.2,usage:.15,support:.1,renewal:.15,opportunity:.1,qualification:.1,dataQuality:.05},meddpiccWeights:{confirmed:1,partial:.65,assumed:.35,missing:0,stale:.2,"not-applicable":1}} as const;

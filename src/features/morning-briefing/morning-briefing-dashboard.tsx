@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useReducer, useRef, useState } from "react";
+import Link from "next/link";
 import { defaultDecisionControlPolicy } from "@/decision-control";
 import type { DecisionPriority, DecisionStatus, GovernedDecision } from "@/domain/decisions/types";
 import { agentStatuses, decisionControlResult, governedDecisions, morningMetrics } from "./data";
@@ -17,7 +18,7 @@ const label = (value:string) => value.split("-").map((word)=>word[0]?.toUpperCas
 const toneForPriority = (priority:DecisionPriority):Tone => priority === "critical" || priority === "high" ? "red" : priority === "medium" ? "amber" : "blue";
 
 function StatusPill({children,tone="blue"}:{children:React.ReactNode;tone?:Tone|"slate"}) { return <span className={`status-pill tone-${tone}`}>{children}</span>; }
-function AppSidebar({open,onClose}:{open:boolean;onClose:()=>void}) { return <>{open&&<button className="sidebar-backdrop" aria-label="Close navigation" onClick={onClose}/>}<aside className={`sidebar ${open?"sidebar-open":""}`} aria-label="Main navigation"><div className="brand"><strong>CogniVit<span>.ai</span></strong><small>AROS · AUTONOMOUS REVENUE OS</small></div><nav>{navItems.map((item,index)=><button key={item} className={`nav-item ${index===0?"active":""}`} aria-current={index===0?"page":undefined} onClick={index===0?onClose:undefined}><span className="glyph" aria-hidden="true">{["⌁","✣","▣","◇","⌁","↗","◎","⚙"][index]}</span>{item}</button>)}</nav><div className="system-status"><span><i/> LIVE SYSTEM</span><small>214 accounts monitored</small></div></aside></>; }
+function AppSidebar({open,onClose}:{open:boolean;onClose:()=>void}) { return <>{open&&<button className="sidebar-backdrop" aria-label="Close navigation" onClick={onClose}/>}<aside className={`sidebar ${open?"sidebar-open":""}`} aria-label="Main navigation"><div className="brand"><strong>CogniVit<span>.ai</span></strong><small>AROS · AUTONOMOUS REVENUE OS</small></div><nav>{navItems.map((item,index)=>item==="Accounts"?<Link key={item} className="nav-item" href="/accounts"><span className="glyph" aria-hidden="true">▣</span>{item}</Link>:<button key={item} className={`nav-item ${index===0?"active":""}`} aria-current={index===0?"page":undefined} onClick={index===0?onClose:undefined}><span className="glyph" aria-hidden="true">{["⌁","✣","▣","◇","⌁","↗","◎","⚙"][index]}</span>{item}</button>)}</nav><div className="system-status"><span><i/> LIVE SYSTEM</span><small>214 accounts monitored</small></div></aside></>; }
 function PageHeader({onMenu}:{onMenu:()=>void}) { return <header className="page-header"><button className="menu-button" onClick={onMenu} aria-label="Open navigation"><span/><span/><span/></button><div><h1>Good Morning, Uphaar</h1><p>Your AI workforce analyzed the revenue organization overnight.</p></div><div className="avatar" aria-label="Uphaar Kotru profile">UK</div></header>; }
 function MetricCard({metric}:{metric:(typeof morningMetrics)[number]}) { return <article className="metric-card" tabIndex={0}><p>{metric.label}</p><strong>{metric.value}</strong><StatusPill tone={metric.tone}>{metric.indicator}</StatusPill></article>; }
 

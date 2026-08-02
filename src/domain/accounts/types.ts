@@ -15,4 +15,10 @@ export interface AccountContext {
   currency: "USD";
   executiveSponsor: string | null;
   accountStatus: "active" | "inactive";
+  stakeholderEngagement?: string;
+  productUsageTrend?: string;
+  qualificationGaps?: string[];
+  activeRisks?: string[];
+  dataQualityScore?: number;
+  provenanceSourceIds?: string[];
 }
