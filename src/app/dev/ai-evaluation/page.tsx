@@ -1,0 +1,2 @@
+import {notFound} from "next/navigation";import {ApplicationShell} from "@/components/application-shell";import {AIEvaluationDashboard} from "@/features/dev/ai-evaluation-dashboard/ai-evaluation-dashboard";import {createCoinbaseQualityFixture} from "@/data/ai-quality-fixtures/coinbase-renewal";
+export default function AIEvaluationPage(){if(process.env.NODE_ENV==="production")notFound();const{report}=createCoinbaseQualityFixture();return <ApplicationShell active="accounts"><AIEvaluationDashboard initialReport={report}/></ApplicationShell>}
