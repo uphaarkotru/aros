@@ -1,0 +1,3 @@
+import type { AIExecutionTrace } from "@/domain/ai-developer-console/types";
+import { replayEvaluationArtifact } from "@/evaluation-artifacts/replay";
+export function replayAIExecutionTrace(trace:AIExecutionTrace,now:string){const artifact=trace.artifactStage.output?.artifact;if(!artifact)return{success:false,errors:["trace-artifact-unavailable"],incrementalApiCostUsd:0,versionMismatch:false};const replay=replayEvaluationArtifact({artifact,now});return{success:replay.parseSuccess&&replay.integrityValid,errors:replay.errors,incrementalApiCostUsd:0,historicalOriginalCostUsd:trace.economicsStage.output?.analytics.cost.historicalOriginalCostUsd,versionMismatch:artifact.evaluationVersion!==replay.evaluation?.policyVersion,replay};}
