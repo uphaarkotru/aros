@@ -2,7 +2,7 @@ import type {AgentContextPackage,ContextBudgetPolicy,ContextOmission,ContextSect
 import {compressAccountSummary} from "../compression/account-summary";
 import {estimateContextTokens} from "./estimate-tokens";
 
-interface BudgetResult{context:AgentContextPackage;omissions:ContextOmission[];compressed:ContextSection[];before:number;after:number;hardLimitExceeded:boolean;}
+export interface BudgetResult{context:AgentContextPackage;omissions:ContextOmission[];compressed:ContextSection[];before:number;after:number;hardLimitExceeded:boolean;}
 const omit=(section:ContextSection,id:string,score:number,stage:string):ContextOmission=>({section,itemId:id,reason:"token-budget",relevanceScore:score,requiredByPolicy:false,omittedAtStage:stage});
 
 export function enforceContextBudget(input:AgentContextPackage,policy:ContextBudgetPolicy):BudgetResult{
