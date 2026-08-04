@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:readiness": "node scripts/run-readiness-suite.mjs readiness",
+    "test:resilience": "node scripts/run-readiness-suite.mjs resilience",
+    "test:demo-smoke": "node scripts/run-readiness-suite.mjs demo",
+    "test:design-partner": "node scripts/run-readiness-suite.mjs design-partner"
   },
   "dependencies": {
     "next": "16.2.12",
