@@ -1,2 +1,2 @@
-import { ApplicationShell } from "@/components/application-shell";import { accountDigitalTwins } from "@/data/synthetic/final-account-digital-twins";import { AccountsList } from "@/features/accounts/accounts-list";
-export default function AccountsPage(){return <ApplicationShell active="accounts"><AccountsList twins={accountDigitalTwins}/></ApplicationShell>}
+import { ApplicationShell } from "@/components/application-shell";import { accountDigitalTwins } from "@/data/synthetic/final-account-digital-twins";import { AccountsList } from "@/features/accounts/accounts-list";import {requireIdentity} from "@/auth/guards.server";
+export default async function AccountsPage(){const identity=await requireIdentity(),twins=accountDigitalTwins.filter(twin=>identity.scope?.accountIds.includes(twin.accountId));return <ApplicationShell active="accounts"><AccountsList twins={twins}/></ApplicationShell>}

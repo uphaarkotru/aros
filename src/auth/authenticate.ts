@@ -1,0 +1,2 @@
+import { verifyPassword } from "./password";import type { IdentityRepository } from "./repository";
+export function authenticateCredentials(repository:IdentityRepository,email:string,password:string){const user=repository.findUserByEmail(email);if(!user||user.status!=="ACTIVE"||!verifyPassword(password,user.passwordHash))return null;const organization=repository.read().organizations.find(item=>item.id===user.organizationId);return organization?.status==="ACTIVE"?user:null}

@@ -1,0 +1,3 @@
+import { revenueRoles, type RevenueRole } from "./types";
+export function parseLoginInput(value:unknown){if(!value||typeof value!=="object")return null;const input=value as Record<string,unknown>,email=typeof input.email==="string"?input.email.trim().toLowerCase():"",password=typeof input.password==="string"?input.password:"";return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&password.length>=8&&password.length<=256?{email,password}:null}
+export function parseRole(value:unknown):RevenueRole|null|undefined {if(value===null)return null;return typeof value==="string"&&revenueRoles.includes(value as RevenueRole)?value as RevenueRole:undefined}

@@ -1,16 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import "./auth.css";
+import "./admin.css";
+import {ApplicationModeBadge} from "@/components/application-mode-badge";
 
 export const metadata: Metadata = {
   title: "Morning Briefing | CogniVit AROS",
@@ -23,11 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full">{children}</body>
+    <html lang="en" className="h-full antialiased">
+      <body className="min-h-full"><ApplicationModeBadge/>{children}</body>
     </html>
   );
 }

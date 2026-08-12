@@ -1,5 +1,2 @@
-import { MorningBriefingDashboard } from "@/features/morning-briefing/morning-briefing-dashboard";
-
-export default function Home() {
-  return <MorningBriefingDashboard />;
-}
+import { redirect } from "next/navigation";
+export default function Home() { redirect("/today"); }

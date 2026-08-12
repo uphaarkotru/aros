@@ -1,0 +1,2 @@
+import Link from "next/link";import { requireIdentity } from "@/auth/guards.server";
+export default async function AccessDenied(){await requireIdentity();return <main className="auth-page"><section className="auth-card"><span className="eyebrow">403 · ACCESS DENIED</span><h1>This experience is outside your role or scope.</h1><p>AROS protects revenue context by tenant, reporting relationship, assignment, and permission.</p><Link className="primary-button" href="/today">Return to Today</Link></section></main>}
