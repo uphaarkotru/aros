@@ -22,8 +22,16 @@ export const rolePermissions:Record<RevenueRole,ReadonlySet<Permission>>={
   PARTNER_SALES:new Set([...commonSeller,permissions.partnerRead,permissions.partnerManage]),
   VP_SALES:new Set([...commonSeller,permissions.accountUpdate,permissions.opportunityUpdate,permissions.sellerRead,permissions.sellerCoach,permissions.managerDecisionApprove,permissions.forecastRead,permissions.forecastManage,permissions.organizationRead]),
   CRO:new Set([...commonSeller,permissions.accountUpdate,permissions.opportunityUpdate,permissions.sellerRead,permissions.sellerCoach,permissions.managerDecisionApprove,permissions.forecastRead,permissions.forecastManage,permissions.partnerRead,permissions.organizationRead,permissions.governanceRead,permissions.recommendationApprove,permissions.leadershipDecision]),
+  FIELD_CTO:new Set([permissions.accountRead,permissions.opportunityRead,permissions.commitmentCreate,permissions.activityCreate]),
+  CUSTOMER_SUCCESS:new Set([permissions.accountRead,permissions.opportunityRead,permissions.commitmentCreate,permissions.commitmentUpdate,permissions.activityCreate]),
+  VALUE_ENGINEERING:new Set([permissions.accountRead,permissions.opportunityRead,permissions.commitmentCreate,permissions.activityCreate]),
+  PRODUCT_SPECIALIST:new Set([permissions.accountRead,permissions.opportunityRead,permissions.commitmentCreate,permissions.activityCreate]),
+  SERVICES:new Set([permissions.accountRead,permissions.opportunityRead,permissions.commitmentCreate,permissions.commitmentUpdate,permissions.activityCreate]),
+  REVOPS:new Set([permissions.accountRead,permissions.opportunityRead,permissions.forecastRead,permissions.organizationRead]),
+  COMMERCIAL:new Set([permissions.accountRead,permissions.opportunityRead,permissions.activityCreate]),
+  FIELD_MARKETING:new Set([permissions.accountRead,permissions.opportunityRead,permissions.activityCreate]),
 };
 export function hasPermission(role:RevenueRole,permission:Permission){return rolePermissions[role].has(permission)}
 
-export const roleDisplay:Record<RevenueRole,string>={SDR:"SDR",AE:"AE",RSM:"RSM",SALES_ENGINEER:"Sales Engineer",SALES_ENGINEER_MANAGER:"SE Manager",PARTNER_SALES:"Partner Sales",VP_SALES:"VP Sales",CRO:"CRO"};
-export const todayPath:Record<RevenueRole,string>={SDR:"/today/sdr",AE:"/today/ae",RSM:"/today/rsm",SALES_ENGINEER:"/today/shared",SALES_ENGINEER_MANAGER:"/today/shared",PARTNER_SALES:"/today/partner",VP_SALES:"/today/vp-sales",CRO:"/today/cro"};
+export const roleDisplay:Record<RevenueRole,string>={SDR:"SDR",AE:"AE",RSM:"RSM",SALES_ENGINEER:"Sales Engineer",SALES_ENGINEER_MANAGER:"SE Manager",PARTNER_SALES:"Partner Sales",VP_SALES:"VP Sales",CRO:"CRO",FIELD_CTO:"Field CTO",CUSTOMER_SUCCESS:"Customer Success",VALUE_ENGINEERING:"Value Engineering",PRODUCT_SPECIALIST:"Product Specialist",SERVICES:"Services",REVOPS:"Revenue Operations",COMMERCIAL:"Commercial",FIELD_MARKETING:"Field Marketing"};
+export const todayPath:Record<RevenueRole,string>={SDR:"/today/sdr",AE:"/today/ae",RSM:"/today/rsm",SALES_ENGINEER:"/today/shared",SALES_ENGINEER_MANAGER:"/today/shared",PARTNER_SALES:"/today/partner",VP_SALES:"/today/vp-sales",CRO:"/today/cro",FIELD_CTO:"/today/shared",CUSTOMER_SUCCESS:"/today/shared",VALUE_ENGINEERING:"/today/shared",PRODUCT_SPECIALIST:"/today/shared",SERVICES:"/today/shared",REVOPS:"/today/shared",COMMERCIAL:"/today/shared",FIELD_MARKETING:"/today/shared"};

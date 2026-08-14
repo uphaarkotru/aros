@@ -1,2 +1,123 @@
-"use client";import {useState,type FormEvent} from "react";
-export function AdminEditor({kind,options=[]}:{kind:"role"|"unit"|"relationship"|"revenue-team";options?:{id:string;label:string}[]}){const[message,setMessage]=useState("");async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=new FormData(event.currentTarget),body=Object.fromEntries(form);body.action=kind;const response=await fetch("/api/admin/foundation",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}),result=await response.json();setMessage(response.ok?"Saved. Refreshing…":result.error??"Unable to save.");if(response.ok)location.reload()}return <form className="admin-inline-form" onSubmit={submit}>{kind==="role"&&<><input name="name" placeholder="Role name" required/><input name="code" placeholder="ROLE_CODE" required/><select name="systemTemplateId"><option value="">No AROS template</option>{options.map(x=><option value={x.id} key={x.id}>{x.label}</option>)}</select></>}{kind==="unit"&&<><input name="name" placeholder="Unit name" required/><select name="type"><option>FUNCTION</option><option>BUSINESS_UNIT</option><option>REGION</option><option>SEGMENT</option><option>TEAM</option><option>POD</option><option>CUSTOM</option></select><select name="parentUnitId"><option value="">Top level</option>{options.map(x=><option value={x.id} key={x.id}>{x.label}</option>)}</select></>}{kind==="relationship"&&<><select name="sourceMembershipId" required><option value="">Report</option>{options.map(x=><option value={x.id} key={x.id}>{x.label}</option>)}</select><select name="targetMembershipId" required><option value="">Manager</option>{options.map(x=><option value={x.id} key={x.id}>{x.label}</option>)}</select><select name="relationshipType"><option>REPORTS_TO</option><option>DOTTED_LINE_TO</option></select></>}{kind==="revenue-team"&&<><input name="accountId" placeholder="Account ID"/><input name="opportunityId" placeholder="Opportunity ID"/><select name="membershipId" required><option value="">Participant</option>{options.map(x=><option value={x.id} key={x.id}>{x.label}</option>)}</select><select name="participationType"><option>OWNER</option><option>SDR_SUPPORT</option><option>SALES_ENGINEERING</option><option>PARTNER</option><option>EXECUTIVE_SPONSOR</option><option>OVERLAY</option><option>CUSTOM</option></select></>}<button>Save</button>{message&&<span>{message}</span>}</form>}
+"use client";
+import { useState, type FormEvent } from "react";
+export function AdminEditor({
+  kind,
+  options = [],
+}: {
+  kind: "role" | "unit" | "relationship" | "revenue-team";
+  options?: { id: string; label: string }[];
+}) {
+  const [message, setMessage] = useState("");
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget),
+      body = Object.fromEntries(form);
+    body.action = kind;
+    const response = await fetch("/api/admin/foundation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      result = await response.json();
+    setMessage(
+      response.ok ? "Saved. Refreshing…" : (result.error ?? "Unable to save."),
+    );
+    if (response.ok) location.reload();
+  }
+  return (
+    <form className="admin-inline-form" onSubmit={submit}>
+      {kind === "role" && (
+        <>
+          <input name="name" placeholder="Role name" required />
+          <input name="code" placeholder="ROLE_CODE" required />
+          <select name="systemTemplateId">
+            <option value="">No AROS template</option>
+            {options.map((x) => (
+              <option value={x.id} key={x.id}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+      {kind === "unit" && (
+        <>
+          <input name="name" placeholder="Unit name" required />
+          <select name="type">
+            <option>FUNCTION</option>
+            <option>BUSINESS_UNIT</option>
+            <option>REGION</option>
+            <option>SEGMENT</option>
+            <option>TEAM</option>
+            <option>POD</option>
+            <option>CUSTOM</option>
+          </select>
+          <select name="parentUnitId">
+            <option value="">Top level</option>
+            {options.map((x) => (
+              <option value={x.id} key={x.id}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+      {kind === "relationship" && (
+        <>
+          <select name="sourceMembershipId" required>
+            <option value="">Report</option>
+            {options.map((x) => (
+              <option value={x.id} key={x.id}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+          <select name="targetMembershipId" required>
+            <option value="">Manager</option>
+            {options.map((x) => (
+              <option value={x.id} key={x.id}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+          <select name="relationshipType">
+            <option>REPORTS_TO</option>
+            <option>DOTTED_LINE_TO</option>
+          </select>
+        </>
+      )}
+      {kind === "revenue-team" && (
+        <>
+          <input name="accountId" placeholder="Account ID" />
+          <input name="opportunityId" placeholder="Opportunity ID" />
+          <select name="membershipId" required>
+            <option value="">Participant</option>
+            {options.map((x) => (
+              <option value={x.id} key={x.id}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+          <select name="participationType">
+            <option>PRIMARY_SELLER</option>
+            <option>PROSPECTING</option>
+            <option>SALES_ENGINEERING</option>
+            <option>TECHNICAL_EXECUTIVE</option>
+            <option>CUSTOMER_SUCCESS</option>
+            <option>VALUE_ENGINEERING</option>
+            <option>PRODUCT_SPECIALIST</option>
+            <option>PARTNER</option>
+            <option>SERVICES</option>
+            <option>EXECUTIVE_SPONSOR</option>
+            <option>COMMERCIAL</option>
+            <option>MARKETING</option>
+            <option>OVERLAY</option>
+            <option>CUSTOM</option>
+          </select>
+        </>
+      )}
+      <button>Save</button>
+      {message && <span>{message}</span>}
+    </form>
+  );
+}

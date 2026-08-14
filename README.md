@@ -37,6 +37,12 @@ The application defaults to Demo mode, which displays seeded credentials and ena
 
 Runtime identity, sessions, audit history, and tenant-owned revenue data are PostgreSQL-backed. Migrations `001` through `004` are applied in order and tracked in `schema_migrations`.
 
+## Role and revenue-team semantics
+
+AROS keeps three independent concepts: an organization role describes a person's durable function, organization relationships describe where they report, and revenue-team participation describes what they are doing for one account or opportunity. Participation never grants management authority.
+
+Standard participation types are `PRIMARY_SELLER`, `PROSPECTING`, `SALES_ENGINEERING`, `TECHNICAL_EXECUTIVE`, `CUSTOMER_SUCCESS`, `VALUE_ENGINEERING`, `PRODUCT_SPECIALIST`, `PARTNER`, `SERVICES`, `EXECUTIVE_SPONSOR`, `COMMERCIAL`, `MARKETING`, `OVERLAY`, and `CUSTOM`. Legacy `OWNER` and `SDR_SUPPORT` values remain readable for backward compatibility. Multiple different participation rows are allowed for the same member and motion; identical rows are rejected.
+
 ## Verification
 
 ```bash

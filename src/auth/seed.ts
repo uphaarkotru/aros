@@ -21,6 +21,9 @@ export function createDemoIdentityStore():IdentityStore{return migrateIdentitySt
   user("user-se-manager-anita","Anita","Sharma","anita.sharma@demo.cognivit.ai","SALES_ENGINEER_MANAGER","user-cro-michael","team-se"),
   user("user-se-raj","Raj","Patel","raj.patel@demo.cognivit.ai","SALES_ENGINEER","user-se-manager-anita","team-se"),
   user("user-partner-priya","Priya","Shah","priya.shah@demo.cognivit.ai","PARTNER_SALES","user-vp-jennifer","team-partners"),
+  user("user-field-cto-david","David","Lee","david.lee@demo.cognivit.ai","FIELD_CTO","user-cro-michael","team-se"),
+  user("user-cs-maria","Maria","Gomez","maria.gomez@demo.cognivit.ai","CUSTOMER_SUCCESS","user-cro-michael","team-revenue"),
+  user("user-value-jason","Jason","Wu","jason.wu@demo.cognivit.ai","VALUE_ENGINEERING","user-cro-michael","team-revenue"),
   user("user-other-tenant","Taylor","Brooks","taylor@isolation.demo","AE",null,null,{organizationId:"org-isolation-test",regionId:null,isDemoUser:false}),
  ],
  teams:[
@@ -35,7 +38,7 @@ export function createDemoIdentityStore():IdentityStore{return migrateIdentitySt
  regions:[{id:"region-na",organizationId,name:"North America",parentRegionId:null}],sessions:[],auditEvents:[],
  assignments:[
   {organizationId,resourceType:"account",resourceId:"acct-coinbase",userId:"user-ae-sarah",sharedWithUserIds:["user-sdr-alex","user-se-raj"],partnerUserId:"user-partner-priya"},
-  {organizationId,resourceType:"opportunity",resourceId:"opp-coinbase-renewal",userId:"user-ae-sarah",sharedWithUserIds:["user-sdr-alex","user-se-raj"],partnerUserId:"user-partner-priya"},
+  {organizationId,resourceType:"opportunity",resourceId:"opp-coinbase-renewal",userId:"user-ae-sarah",sharedWithUserIds:["user-sdr-alex","user-se-raj","user-field-cto-david","user-cs-maria","user-value-jason"],partnerUserId:"user-partner-priya"},
   {organizationId,resourceType:"account",resourceId:"acct-paypal",userId:"user-ae-daniel"},
   {organizationId,resourceType:"account",resourceId:"acct-nvidia",userId:"user-ae-priya"},
   {organizationId,resourceType:"account",resourceId:"acct-franklin",userId:"user-ae-sarah"},
