@@ -12,11 +12,18 @@
     "test:readiness": "node scripts/run-readiness-suite.mjs readiness",
     "test:resilience": "node scripts/run-readiness-suite.mjs resilience",
     "test:demo-smoke": "node scripts/run-readiness-suite.mjs demo",
-    "test:design-partner": "node scripts/run-readiness-suite.mjs design-partner"
+    "test:design-partner": "node scripts/run-readiness-suite.mjs design-partner",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:seed": "tsx scripts/db-seed.ts",
+    "db:import-identity": "tsx scripts/db-import-identity.ts",
+    "db:reset": "tsx scripts/db-reset.ts",
+    "db:setup": "npm run db:migrate && npm run db:seed",
+    "test:postgres": "vitest run src/db/postgres.integration.test.ts src/db/identity-concurrency.integration.test.ts"
   },
   "dependencies": {
     "next": "16.2.12",
     "openai": "^7.3.0",
+    "pg": "^8.23.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "server-only": "^0.0.1"
@@ -27,13 +34,16 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
+    "@types/pg": "^8.21.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

@@ -1,7 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { MorningBriefingDashboard } from "./morning-briefing-dashboard";
+import { MorningBriefingDashboard as PersistedDashboard } from "./morning-briefing-dashboard";
+import {governedDecisions} from "./data";
+const MorningBriefingDashboard=()=> <PersistedDashboard initialDecisions={governedDecisions}/>;
 
 async function openCoinbase() {
   await userEvent.click(screen.getByRole("button", { name: /view details for coinbase renewal risk/i }));

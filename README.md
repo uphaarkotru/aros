@@ -2,11 +2,23 @@
 
 AROS now has a tenant-aware identity and authorization foundation: email/password authentication, opaque server-side sessions, stable revenue roles, reporting hierarchy, centralized permissions, assignment-based resource scope, role-based Today routing, safe demo View As, and authenticated audit identity.
 
-## Local demo login
+## Local PostgreSQL setup
 
 ```bash
 npm install
+npm run db:migrate
+npm run db:seed
 npm run dev
+```
+
+Start PostgreSQL first with `docker compose up -d postgres`, then copy `.env.example` to `.env.local`. `DATABASE_URL` is mandatory outside unit tests; runtime code intentionally has no file or fixture fallback. To rebuild a disposable development database use `ALLOW_DATABASE_RESET=true npm run db:reset`, followed by `npm run db:setup`. Run real-adapter isolation tests with `TEST_DATABASE_URL=... npm run test:postgres`.
+
+The deterministic seed is idempotent and writes CogniVit Demo Enterprise, Acme Software, Globex Technologies, identities, roles, reporting relationships, accounts, opportunities, Revenue Digital Twins, signals, actions, and revenue-team assignments through PostgreSQL. Demo and production use the same schema.
+
+To import a previous `.aros-data/identity.json` while preserving IDs, emails, memberships, roles, authority, and reporting relationships:
+
+```bash
+AROS_IDENTITY_IMPORT_PATH=.aros-data/identity.json npm run db:import-identity
 ```
 
 Open `http://localhost:3000/login`. Every deterministic demo identity uses `ArosDemo!2026` unless `AROS_DEMO_PASSWORD` is set before the identity store is first created.
@@ -23,7 +35,7 @@ The application defaults to Demo mode, which displays seeded credentials and ena
 | Organization admin | admin@demo.cognivit.ai |
 | CRO | michael.roberts@demo.cognivit.ai |
 
-Runtime identity state defaults to `.aros-data/identity.json` and is created deterministically on first use. Delete that generated development file to reseed. Set `AROS_IDENTITY_STORE_PATH` to choose another writable location. Production deployments should implement the existing repository interface with PostgreSQL and apply [migrations/001_identity_authorization.sql](migrations/001_identity_authorization.sql); the file adapter is intended for the deterministic single-instance phase only.
+Runtime identity, sessions, audit history, and tenant-owned revenue data are PostgreSQL-backed. Migrations `001` through `004` are applied in order and tracked in `schema_migrations`.
 
 ## Verification
 
