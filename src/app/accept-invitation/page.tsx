@@ -1,0 +1,2 @@
+import {Suspense} from "react";import {AcceptInvitationForm} from "./accept-invitation-form";
+export default function AcceptInvitationPage(){return <main className="auth-page"><section className="auth-card"><div className="brand"><strong>CogniVit<span>.ai</span></strong><small>AROS · TENANT ONBOARDING</small></div><h1>Accept invitation</h1><p>Create your identity and activate your organization membership.</p><Suspense><AcceptInvitationForm/></Suspense></section></main>}

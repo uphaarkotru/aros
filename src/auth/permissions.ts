@@ -21,7 +21,7 @@ export const rolePermissions:Record<RevenueRole,ReadonlySet<Permission>>={
   SALES_ENGINEER_MANAGER:new Set([permissions.accountRead,permissions.opportunityRead,permissions.sellerRead,permissions.sellerCoach,permissions.commitmentCreate,permissions.commitmentUpdate]),
   PARTNER_SALES:new Set([...commonSeller,permissions.partnerRead,permissions.partnerManage]),
   VP_SALES:new Set([...commonSeller,permissions.accountUpdate,permissions.opportunityUpdate,permissions.sellerRead,permissions.sellerCoach,permissions.managerDecisionApprove,permissions.forecastRead,permissions.forecastManage,permissions.organizationRead]),
-  CRO:new Set(Object.values(permissions).filter(value=>value!==permissions.demoViewAs) as Permission[]),
+  CRO:new Set([...commonSeller,permissions.accountUpdate,permissions.opportunityUpdate,permissions.sellerRead,permissions.sellerCoach,permissions.managerDecisionApprove,permissions.forecastRead,permissions.forecastManage,permissions.partnerRead,permissions.organizationRead,permissions.governanceRead,permissions.recommendationApprove,permissions.leadershipDecision]),
 };
 export function hasPermission(role:RevenueRole,permission:Permission){return rolePermissions[role].has(permission)}
 

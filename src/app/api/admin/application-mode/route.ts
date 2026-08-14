@@ -16,7 +16,7 @@ export async function PUT(request:Request){
  if(mode!==before){
   setApplicationMode(mode);
   if(mode==="PRODUCTION")for(const session of identityRepository.read().sessions)if(session.viewAsRole)identityRepository.saveSession({...session,viewAsRole:null,lastSeenAt:new Date().toISOString()});
-  recordAudit(actor,{event:"application.mode.updated",resourceType:"organization",resourceId:actor.organizationId,before:{mode:before},after:{mode}});
+  recordAudit(actor,{event:"application.mode.updated",resourceType:"organization",resourceId:identity.organization.id,before:{mode:before},after:{mode}},identity.organization.id);
  }
  return NextResponse.json({mode});
 }
