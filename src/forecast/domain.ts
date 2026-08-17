@@ -38,6 +38,8 @@ export interface ForecastEvidenceInput {
   completedCommitments: number;
   executiveEngagementDeclining: boolean;
   coverageGapCount: number;
+  indicatorRiskCount: number;
+  indicatorCriticalCount: number;
   activeManagerInterventions: number;
   crossFunctionalReviewCompleted: boolean;
   riskImproved: boolean;
@@ -124,6 +126,18 @@ export function assessForecast(
       `${input.coverageGapCount} required revenue-team coverage gaps`,
     );
     discrepancies.push("TEAM_COVERAGE_RISK");
+  }
+  if (input.indicatorRiskCount) {
+    addNegative(
+      Math.min(12, input.indicatorRiskCount * 4),
+      `${input.indicatorRiskCount} leading indicators are deteriorating`,
+    );
+  }
+  if (input.indicatorCriticalCount) {
+    addNegative(
+      Math.min(12, input.indicatorCriticalCount * 6),
+      `${input.indicatorCriticalCount} leading indicator${input.indicatorCriticalCount === 1 ? " is" : "s are"} critical`,
+    );
   }
   if (input.activeManagerInterventions)
     addNegative(4, "Manager intervention remains unresolved");

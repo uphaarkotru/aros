@@ -233,6 +233,9 @@ describe.skipIf(!connectionString)("PostgreSQL unified revenue cadence", () => {
     expect(
       aeSdrData?.agenda.some((item) => item.type === "COMMITMENT_SLIPPAGE"),
     ).toBe(true);
+    expect(
+      aeSdrData?.agenda.some((item) => item.type === "LEADING_INDICATOR"),
+    ).toBe(true);
     const twoByTwo = await a.createCadence({
         idempotencyKey: `auto-2x2-${crypto.randomUUID()}`,
         organizationId,

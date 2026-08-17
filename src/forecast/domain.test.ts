@@ -15,6 +15,8 @@ const base = {
   completedCommitments: 1,
   executiveEngagementDeclining: false,
   coverageGapCount: 0,
+  indicatorRiskCount: 0,
+  indicatorCriticalCount: 0,
   activeManagerInterventions: 0,
   crossFunctionalReviewCompleted: false,
   riskImproved: true,
@@ -62,6 +64,16 @@ describe("evidence forecast", () => {
         missingEvidence: ["economic buyer", "security date", "decision date"],
       }).confidence,
     ).toBe("LOW");
+  });
+
+  it("uses leading-indicator deterioration as evidence without changing human categories", () => {
+    const result = assessForecast({
+      ...base,
+      indicatorRiskCount: 3,
+      indicatorCriticalCount: 1,
+    });
+    expect(result.negativeEvidence.join(" ")).toMatch(/leading indicator|critical/i);
+    expect(result.discrepancyTypes).toContain("SELLER_AROS_DISAGREEMENT");
   });
 
   it("rolls up each opportunity once", () => {

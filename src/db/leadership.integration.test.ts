@@ -96,6 +96,7 @@ describe.skipIf(!connectionString)("PostgreSQL leadership intelligence", () => {
       });
     expect(result.arosCategory).toBe("HIGH_RISK");
     expect(result.negativeEvidence.join(" ")).toMatch(/security|commitment/i);
+    expect(result.negativeEvidence.join(" ")).toMatch(/leading indicator/i);
     expect(
       Number(
         (

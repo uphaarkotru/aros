@@ -81,6 +81,10 @@ export class PostgresLeadershipRepository {
         coverage = await client.query(
           `SELECT DISTINCT participation_type FROM revenue_team_assignments WHERE organization_id=$1 AND opportunity_id=$2`,
           [input.organizationId, input.opportunityId],
+        ),
+        indicators = await client.query(
+          `SELECT status FROM leading_indicators WHERE organization_id=$1 AND opportunity_id=$2 AND status IN('WATCH','AT_RISK','CRITICAL')`,
+          [input.organizationId, input.opportunityId],
         );
       const previous = (
           await client.query(
@@ -173,6 +177,10 @@ export class PostgresLeadershipRepository {
           ),
           coverageGapCount: requiredCoverage.filter(
             (type) => !covered.has(type),
+          ).length,
+          indicatorRiskCount: indicators.rows.length,
+          indicatorCriticalCount: indicators.rows.filter(
+            (row) => row.status === "CRITICAL",
           ).length,
           activeManagerInterventions: interventions.rowCount ?? 0,
           crossFunctionalReviewCompleted: cadences.rows.some(
@@ -308,6 +316,12 @@ export class PostgresLeadershipRepository {
           `${scopeCte} SELECT m.id membership_id,u.display_name,count(DISTINCT mi.id)::int interventions,count(DISTINCT mi.id) FILTER(WHERE mi.status IN('RESOLVED','MONITORING'))::int progressed,count(DISTINCT c.id) FILTER(WHERE c.status IN('OPEN','IN_PROGRESS','BLOCKED','MISSED') AND c.due_at<now())::int overdue_commitments FROM organization_memberships m JOIN users u ON u.id=m.user_id JOIN organization_relationships reports ON(reports.organization_id=m.organization_id AND reports.target_membership_id=m.id AND reports.relationship_type='REPORTS_TO' AND reports.effective_to IS NULL) LEFT JOIN manager_interventions mi ON(mi.organization_id=m.organization_id AND mi.manager_membership_id=m.id) LEFT JOIN commitments c ON(c.organization_id=m.organization_id AND c.owner_membership_id=reports.source_membership_id) WHERE m.organization_id=$1 AND m.id IN(SELECT membership_id FROM leadership_scope) GROUP BY m.id,u.display_name ORDER BY overdue_commitments DESC,interventions DESC`,
           [organizationId, leaderMembershipId],
         )
+      ).rows,
+      coachingThemes = (
+        await this.pool.query(
+          `${scopeCte} SELECT li.indicator_type,count(DISTINCT ci.membership_id)::int seller_count,count(*)::int insight_count FROM coaching_insights ci JOIN leading_indicators li ON(li.organization_id=ci.organization_id AND li.id=ci.source_indicator_id) WHERE ci.organization_id=$1 AND (ci.opportunity_id IN(SELECT id FROM scoped_opportunities) OR ci.account_id IN(SELECT account_id FROM opportunities WHERE organization_id=$1 AND id IN(SELECT id FROM scoped_opportunities))) GROUP BY li.indicator_type ORDER BY insight_count DESC`,
+          [organizationId, leaderMembershipId],
+        )
       ).rows;
     const rollup = rollUpForecast(
       assessments.map((item) => ({
@@ -326,6 +340,7 @@ export class PostgresLeadershipRepository {
       patterns,
       operating,
       managerHealth,
+      coachingThemes,
       rollup,
     };
   }

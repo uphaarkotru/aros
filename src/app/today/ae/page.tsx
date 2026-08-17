@@ -6,6 +6,7 @@ import { actionToGovernedDecision } from "@/features/morning-briefing/action-ada
 import { cadenceRepository } from "@/db/cadence-repository";
 import { identityRepository } from "@/auth/repository.server";
 import { getMembership } from "@/auth/tenant-model";
+import { leadingIndicatorRepository } from "@/db/leading-indicator-repository";
 
 export default async function Page() {
   const identity = await requireIdentity();
@@ -18,7 +19,13 @@ export default async function Page() {
     ),
     accountIds = identity.scope?.accountIds ?? [];
   const allowed = new Set(accountIds);
-  const [actions, organizationAccounts, cadences] = await Promise.all([
+  const [
+    actions,
+    organizationAccounts,
+    cadences,
+    leadingIndicators,
+    coachingInsights,
+  ] = await Promise.all([
     revenueRepository.listActions(identity.organization.id, accountIds),
     revenueRepository.listAccounts(identity.organization.id),
     cadenceRepository
@@ -26,6 +33,18 @@ export default async function Page() {
           identity.organization.id,
           effectiveMembership?.id ?? identity.membership.id,
         )
+      : [],
+    leadingIndicatorRepository && effectiveMembership
+      ? leadingIndicatorRepository.listForViewer({
+          organizationId: identity.organization.id,
+          membershipId: effectiveMembership.id,
+        })
+      : [],
+    leadingIndicatorRepository && effectiveMembership
+      ? leadingIndicatorRepository.listCoachingInsights({
+          organizationId: identity.organization.id,
+          membershipId: effectiveMembership.id,
+        })
       : [],
   ]);
   const accounts = organizationAccounts
@@ -61,6 +80,8 @@ export default async function Page() {
         agendaCount: cadence.agenda_count,
         carryForwardCount: cadence.carry_forward_count,
       }))}
+      leadingIndicators={leadingIndicators}
+      coachingInsights={coachingInsights}
     />
   );
 }

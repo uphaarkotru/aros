@@ -114,7 +114,7 @@ export class PostgresCadenceRepository {
     for (const motion of motions) {
       const facts = (
         await this.pool.query(
-          `SELECT COALESCE(max(EXTRACT(day FROM now()-b.first_observed_at)) FILTER(WHERE b.status<>'RESOLVED'),0)::int blocker_days,count(DISTINCT c.id) FILTER(WHERE c.status IN('OPEN','IN_PROGRESS','BLOCKED') AND c.due_at<now())::int overdue_commitments,EXISTS(SELECT 1 FROM revenue_signals s WHERE s.organization_id=$1 AND s.opportunity_id=$2 AND (lower(s.type) LIKE '%executive%' OR lower(s.payload::text) LIKE '%executive%declin%')) executive_declining,EXISTS(SELECT 1 FROM revenue_signals s WHERE s.organization_id=$1 AND s.opportunity_id=$2 AND (lower(s.type) LIKE '%methodology%' OR lower(s.payload::text) LIKE '%methodology%gap%')) methodology_gap,(SELECT COALESCE(max(updated_at),to_timestamp(0)) FROM commitments WHERE organization_id=$1 AND opportunity_id=$2) commitment_changed,(SELECT COALESCE(max(updated_at),to_timestamp(0)) FROM cadence_blockers WHERE organization_id=$1 AND opportunity_id=$2) blocker_changed FROM cadence_blockers b FULL JOIN commitments c ON(c.organization_id=b.organization_id AND c.opportunity_id=b.opportunity_id) WHERE COALESCE(b.organization_id,c.organization_id)=$1 AND COALESCE(b.opportunity_id,c.opportunity_id)=$2`,
+          `SELECT COALESCE(max(EXTRACT(day FROM now()-b.first_observed_at)) FILTER(WHERE b.status<>'RESOLVED'),0)::int blocker_days,count(DISTINCT c.id) FILTER(WHERE c.status IN('OPEN','IN_PROGRESS','BLOCKED') AND c.due_at<now())::int overdue_commitments,EXISTS(SELECT 1 FROM revenue_signals s WHERE s.organization_id=$1 AND s.opportunity_id=$2 AND (lower(s.type) LIKE '%executive%' OR lower(s.payload::text) LIKE '%executive%declin%')) executive_declining,EXISTS(SELECT 1 FROM revenue_signals s WHERE s.organization_id=$1 AND s.opportunity_id=$2 AND (lower(s.type) LIKE '%methodology%' OR lower(s.payload::text) LIKE '%methodology%gap%')) methodology_gap,(SELECT count(*)::int FROM leading_indicators li WHERE li.organization_id=$1 AND li.opportunity_id=$2 AND li.status IN('WATCH','AT_RISK','CRITICAL')) indicator_risk_count,(SELECT COALESCE(max(updated_at),to_timestamp(0)) FROM commitments WHERE organization_id=$1 AND opportunity_id=$2) commitment_changed,(SELECT COALESCE(max(updated_at),to_timestamp(0)) FROM cadence_blockers WHERE organization_id=$1 AND opportunity_id=$2) blocker_changed FROM cadence_blockers b FULL JOIN commitments c ON(c.organization_id=b.organization_id AND c.opportunity_id=b.opportunity_id) WHERE COALESCE(b.organization_id,c.organization_id)=$1 AND COALESCE(b.opportunity_id,c.opportunity_id)=$2`,
           [organizationId, motion.opportunity_id],
         )
       ).rows[0];
@@ -145,6 +145,7 @@ export class PostgresCadenceRepository {
           executiveEngagementDeclining: Boolean(facts.executive_declining),
           methodologyGap: Boolean(facts.methodology_gap),
           coverageGapCount,
+          indicatorRiskCount: Number(facts.indicator_risk_count ?? 0),
           strategic: Number(motion.amount ?? 0) >= 10_000_000,
         });
       if (result.score < 35) continue;
@@ -230,6 +231,12 @@ export class PostgresCadenceRepository {
         [organizationId, managerMembershipId],
       )
     ).rows;
+    const coachingInsights = (
+      await this.pool.query(
+        `SELECT ci.id,ci.title,ci.insight,ci.suggested_action,ci.membership_id,u.display_name FROM coaching_insights ci JOIN organization_memberships m ON(m.organization_id=ci.organization_id AND m.id=ci.membership_id) JOIN users u ON u.id=m.user_id WHERE ci.organization_id=$1 AND ci.membership_id=ANY($2::text[]) ORDER BY ci.updated_at DESC`,
+        [organizationId, reports.map((report) => report.membership_id)],
+      )
+    ).rows;
     return {
       interventions: interventions.map((row) => ({
         ...row,
@@ -244,6 +251,7 @@ export class PostgresCadenceRepository {
         updated_at: iso(row.updated_at),
       })),
       decisions,
+      coachingInsights,
     };
   }
   async getIntervention(
@@ -558,6 +566,14 @@ export class PostgresCadenceRepository {
             [input.organizationId, input.opportunityId],
           )
         ).rows,
+        indicators = external
+          ? []
+          : (
+              await c.query(
+                `SELECT indicator_type,status,rationale,evidence FROM leading_indicators WHERE organization_id=$1 AND opportunity_id=$2 AND status IN('WATCH','AT_RISK','CRITICAL') ORDER BY CASE status WHEN 'CRITICAL' THEN 0 WHEN 'AT_RISK' THEN 1 ELSE 2 END,observed_at DESC LIMIT 5`,
+                [input.organizationId, input.opportunityId],
+              )
+            ).rows,
         overdue = (
           await c.query(
             `SELECT description,due_at,status FROM commitments WHERE organization_id=$1 AND opportunity_id=$2 AND status IN('OPEN','IN_PROGRESS','BLOCKED') AND due_at<now() ORDER BY due_at LIMIT 3`,
@@ -575,6 +591,24 @@ export class PostgresCadenceRepository {
             "Confirm owner, evidence required, and dated next checkpoint.",
           recommendedDecision:
             "Assign accountable owner and escalation condition.",
+          visibility: "INTERNAL_ONLY",
+        });
+      for (const indicator of indicators)
+        agenda.push({
+          type: "LEADING_INDICATOR",
+          priority:
+            indicator.status === "CRITICAL"
+              ? 98
+              : indicator.status === "AT_RISK"
+                ? 90
+                : 82,
+          title: indicator.rationale,
+          rationale: `${indicator.indicator_type.replaceAll("_", " ")} is ${indicator.status.replaceAll("_", " ")}.`,
+          evidence: indicator.evidence,
+          recommendedDiscussion:
+            "Confirm the evidence, owner, and next dated intervention.",
+          recommendedDecision:
+            "Agree the smallest action that can improve the indicator.",
           visibility: "INTERNAL_ONLY",
         });
       if (overdue.length)

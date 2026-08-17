@@ -1240,6 +1240,206 @@ async function main() {
       );
   }
 
+  async function seedLeadingIndicators(client: PoolClient) {
+    const organizationId = "org-cognivit-demo",
+      accountId = "acct-coinbase",
+      opportunityId = "opp-coinbase-renewal",
+      sarah = "membership-org-cognivit-demo-user-ae-sarah",
+      indicators = [
+        [
+          "indicator-coinbase-product-usage",
+          "indicator:coinbase:product-usage",
+          "CUSTOMER_MEETING_HEALTH",
+          "HEALTHY",
+          88,
+          "HIGH",
+          ["Product adoption remains strong", "Usage trend is improving"],
+          "Product usage is healthy because adoption remains strong and usage is improving.",
+          "2026-08-20T16:00:00Z",
+        ],
+        [
+          "indicator-coinbase-executive-engagement",
+          "indicator:coinbase:executive-engagement",
+          "EXECUTIVE_ENGAGEMENT",
+          "AT_RISK",
+          42,
+          "HIGH",
+          [
+            "No CTO interaction in 45 days",
+            "Renewal decision is within 60 days",
+            "Technical decision maker is not engaged",
+          ],
+          "Executive engagement is at risk because CTO interaction declined while the renewal approaches.",
+          "2026-08-20T16:00:00Z",
+        ],
+        [
+          "indicator-coinbase-security-review",
+          "indicator:coinbase:security-review",
+          "SECURITY_REVIEW_PROGRESS",
+          "CRITICAL",
+          24,
+          "HIGH",
+          [
+            "Security approval milestone delayed",
+            "Architecture response is 3 days overdue",
+            "Customer checkpoint is still open",
+          ],
+          "Security review is critical because the customer approval milestone remains delayed.",
+          "2026-08-20T16:00:00Z",
+        ],
+        [
+          "indicator-coinbase-commitments",
+          "indicator:coinbase:commitment-health",
+          "CUSTOMER_COMMITMENT_HEALTH",
+          "AT_RISK",
+          38,
+          "HIGH",
+          [
+            "Two material commitments are overdue",
+            "Recovery date is not customer-confirmed",
+          ],
+          "Customer commitment health is at risk because two material renewal commitments are overdue.",
+          "2026-08-20T16:00:00Z",
+        ],
+        [
+          "indicator-coinbase-economic-buyer",
+          "indicator:coinbase:economic-buyer",
+          "ECONOMIC_BUYER_ACCESS",
+          "WATCH",
+          51,
+          "MEDIUM",
+          [
+            "Economic buyer is not confirmed",
+            "Champion remains active but authority is unvalidated",
+          ],
+          "Economic-buyer access is a watch item because the approval authority has not been confirmed.",
+          "2026-08-20T16:00:00Z",
+        ],
+        [
+          "indicator-coinbase-buying-committee",
+          "indicator:coinbase:buying-committee",
+          "BUYING_COMMITTEE_COVERAGE",
+          "WATCH",
+          58,
+          "MEDIUM",
+          [
+            "Security stakeholder is engaged",
+            "Economic buyer still needs confirmation",
+          ],
+          "Buying committee coverage is a watch item because security is represented but economic authority is not.",
+          "2026-08-20T16:00:00Z",
+        ],
+        [
+          "indicator-coinbase-decision-process",
+          "indicator:coinbase:decision-process",
+          "DECISION_PROCESS_VALIDATION",
+          "UNKNOWN",
+          null,
+          "LOW",
+          [
+            "Decision criteria are not documented",
+            "Approval sequence is unknown",
+          ],
+          "Decision process validation is unknown because the customer approval sequence has not been documented.",
+          "2026-08-20T16:00:00Z",
+        ],
+        [
+          "indicator-coinbase-team-coverage",
+          "indicator:coinbase:team-coverage",
+          "REVENUE_TEAM_COVERAGE",
+          "HEALTHY",
+          86,
+          "HIGH",
+          [
+            "Primary seller, SE, technical executive, CSM, and value engineering are assigned",
+          ],
+          "Revenue-team coverage is healthy for the current renewal motion.",
+          "2026-08-20T16:00:00Z",
+        ],
+      ] as const;
+    for (const [
+      id,
+      sourceKey,
+      type,
+      status,
+      score,
+      confidence,
+      evidence,
+      rationale,
+      observedAt,
+    ] of indicators)
+      await client.query(
+        `INSERT INTO leading_indicators(id,organization_id,account_id,opportunity_id,indicator_type,status,score,confidence,evidence,rationale,source_key,observed_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12,$12) ON CONFLICT(organization_id,source_key) DO UPDATE SET status=excluded.status,score=excluded.score,confidence=excluded.confidence,evidence=excluded.evidence,rationale=excluded.rationale,observed_at=excluded.observed_at,updated_at=now()`,
+        [
+          id,
+          organizationId,
+          accountId,
+          opportunityId,
+          type,
+          status,
+          score,
+          confidence,
+          json(evidence),
+          rationale,
+          sourceKey,
+          observedAt,
+        ],
+      );
+    const timeline = [
+      [
+        "twin-event-indicator-executive-healthy",
+        "LEADING_INDICATOR_CREATED",
+        "indicator-coinbase-executive-engagement",
+        "2026-08-01T16:00:00Z",
+        "Executive engagement was healthy at baseline.",
+      ],
+      [
+        "twin-event-indicator-executive-risk",
+        "LEADING_INDICATOR_CHANGED",
+        "indicator-coinbase-executive-engagement",
+        "2026-08-15T16:00:00Z",
+        "Executive engagement declined; no CTO interaction in 45 days.",
+      ],
+      [
+        "twin-event-indicator-security-critical",
+        "LEADING_INDICATOR_CHANGED",
+        "indicator-coinbase-security-review",
+        "2026-08-20T16:00:00Z",
+        "Security review became critical after the approval milestone slipped.",
+      ],
+    ] as const;
+    for (const [id, eventType, indicatorId, occurredAt, summary] of timeline)
+      await client.query(
+        `INSERT INTO revenue_digital_twin_events(id,organization_id,revenue_digital_twin_id,event_type,payload,occurred_at,created_at) SELECT $1,$2,t.id,$3,$4,$5,$5 FROM revenue_digital_twins t WHERE t.organization_id=$2 AND t.account_id=$6 ON CONFLICT(id) DO NOTHING`,
+        [
+          id,
+          organizationId,
+          eventType,
+          json({ indicatorId, summary }),
+          occurredAt,
+          accountId,
+        ],
+      );
+    await client.query(
+      `INSERT INTO coaching_insights(id,organization_id,membership_id,account_id,opportunity_id,source_indicator_id,title,insight,suggested_action,evidence) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(organization_id,id) DO UPDATE SET title=excluded.title,insight=excluded.insight,suggested_action=excluded.suggested_action,evidence=excluded.evidence,updated_at=now()`,
+      [
+        "coaching-coinbase-executive-engagement",
+        organizationId,
+        sarah,
+        accountId,
+        opportunityId,
+        "indicator-coinbase-executive-engagement",
+        "Enterprise renewal executive engagement",
+        "Enterprise renewals with executive engagement inside 60 days show stronger confidence. Coinbase currently lacks recent executive technical engagement.",
+        "Schedule executive technical alignment before the next security checkpoint.",
+        json([
+          "No CTO interaction in 45 days",
+          "Renewal decision is within 60 days",
+        ]),
+      ],
+    );
+  }
+
   async function ensureTenant(
     client: PoolClient,
     id: string,
@@ -1467,6 +1667,7 @@ async function main() {
     await seedRevenue(client);
     await seedCadence(client);
     await seedLeadership(client);
+    await seedLeadingIndicators(client);
     await client.query("COMMIT");
     console.log(
       "Seeded relational identity and deterministic revenue tenants.",

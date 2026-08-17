@@ -422,6 +422,59 @@ textarea:focus-visible {
 .ae-cadences {
   margin-top: 16px;
 }
+.leading-indicator-panel {
+  margin: 20px 0;
+}
+.leading-health { margin: 20px 0; }
+.leading-health-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.leading-health-list article { border-top: 3px solid var(--blue); padding: 12px; background: #fff; border-radius: 8px; box-shadow: var(--shadow); }
+.leading-health-list article > div { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
+.leading-health-list article p { margin: 8px 0 4px; font-size: 13px; line-height: 1.4; }
+.leading-health-list article small { color: var(--muted); font-size: 11px; }
+.leading-coaching { margin-top: 14px; padding: 12px 14px; border-radius: 8px; background: #eef4ff; }
+.leading-coaching p { margin: 4px 0 0; color: #29487b; font-size: 13px; }
+.leading-indicator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.leading-indicator {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 10px;
+  padding: 14px;
+  background: #fff;
+}
+.leading-indicator > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.leading-indicator strong { color: var(--ink); }
+.leading-indicator p { margin: 10px 0 8px; font-size: 13px; line-height: 1.45; }
+.leading-indicator ul { margin: 0; padding-left: 16px; color: var(--muted); font-size: 12px; }
+.leading-healthy { border-left-color: var(--green); }
+.leading-watch { border-left-color: var(--amber); }
+.leading-at_risk { border-left-color: #ed7b24; }
+.leading-critical { border-left-color: var(--red); }
+.leading-unknown { border-left-color: #8995aa; }
+.coaching-insights { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; }
+.coaching-insights h3 { margin: 0 0 10px; font-size: 15px; }
+.coaching-insights article { padding: 10px 0; border-top: 1px solid #edf1f6; }
+.coaching-insights p { margin: 5px 0; color: var(--muted); font-size: 13px; }
+.coaching-insights small { color: var(--blue); }
+.indicator-timeline { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; }
+.indicator-timeline h3 { margin: 0 0 10px; font-size: 15px; }
+.indicator-timeline ol { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.indicator-timeline li { display: grid; grid-template-columns: 100px 180px 1fr; gap: 10px; align-items: baseline; border-top: 1px solid #edf1f6; padding: 9px 0; font-size: 12px; }
+.indicator-timeline time { color: var(--muted); }
+.indicator-timeline li > span { color: var(--blue); font-weight: 700; text-transform: uppercase; }
+.indicator-timeline p { margin: 0; color: var(--muted); }
 .ae-cadences .section-heading > a {
   color: var(--blue);
   font-size: 11px;

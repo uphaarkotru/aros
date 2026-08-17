@@ -56,6 +56,11 @@ export interface LeadershipBrief {
     progressed: number;
     overdue_commitments: number;
   }>;
+  coachingThemes?: Array<{
+    indicator_type: string;
+    seller_count: number;
+    insight_count: number;
+  }>;
 }
 
 export function LeadershipBriefing({
@@ -150,6 +155,25 @@ export function LeadershipBriefing({
               No {brief.level} interventions are currently eligible.
             </p>
           )}
+        </div>
+      </section>
+      <section className="leadership-section">
+        <h2>Coaching themes across scope</h2>
+        <p className="section-note">
+          Execution patterns for coaching and operating improvement, not
+          individual ranking.
+        </p>
+        <div className="pattern-list">
+          {(brief.coachingThemes ?? []).map((theme) => (
+            <article key={theme.indicator_type}>
+              <span>{words(theme.indicator_type)}</span>
+              <strong>{theme.seller_count} sellers</strong>
+              <small>
+                {theme.insight_count} evidence-backed insight
+                {theme.insight_count === 1 ? "" : "s"}
+              </small>
+            </article>
+          ))}
         </div>
       </section>
 

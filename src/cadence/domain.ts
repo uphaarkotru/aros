@@ -1,21 +1,196 @@
-import type {IdentityRepository} from "@/auth/repository";
-import {getDirectReports,getManagerChain} from "@/auth/hierarchy";
-import {getCoverageGaps,getRevenueTeamCoverage} from "@/auth/revenue-team-coverage";
-import type {ParticipationType} from "@/auth/types";
+import type { IdentityRepository } from "@/auth/repository";
+import { getDirectReports, getManagerChain } from "@/auth/hierarchy";
+import {
+  getCoverageGaps,
+  getRevenueTeamCoverage,
+} from "@/auth/revenue-team-coverage";
+import type { ParticipationType } from "@/auth/types";
 
-export const cadenceTemplateTypes=["MANAGER_1_ON_1","SE_MANAGER_1_ON_1","AE_SE_SYNC","AE_SDR_SYNC","AE_PARTNER_SYNC","CROSS_FUNCTIONAL_2X2","STRATEGIC_DEAL_REVIEW","CUSTOMER_NEXT_STEP","DISCOVERY","TECHNICAL_VALIDATION","SECURITY_REVIEW","EXECUTIVE_SPONSOR_MEETING","RENEWAL_REVIEW","MUTUAL_ACTION_PLAN_CHECKPOINT","FORECAST_REVIEW","VP_OPERATING_REVIEW","CRO_OPERATING_REVIEW","CUSTOM"] as const;
-export const interventionTypes=["DEAL_RISK","SELLER_COACHING","COMMITMENT_SLIPPAGE","EXECUTIVE_ESCALATION","RESOURCE_DECISION","METHODOLOGY_GAP","TECHNICAL_BLOCKER","FORECAST_EXCEPTION","PARTNER_INTERVENTION","CROSS_FUNCTIONAL_COORDINATION","REVENUE_TEAM_COVERAGE_GAP"] as const;
-export type Visibility="SYSTEM_ONLY"|"INTERNAL_ONLY"|"EXTERNAL_SHAREABLE";
+export const cadenceTemplateTypes = [
+  "MANAGER_1_ON_1",
+  "SE_MANAGER_1_ON_1",
+  "AE_SE_SYNC",
+  "AE_SDR_SYNC",
+  "AE_PARTNER_SYNC",
+  "CROSS_FUNCTIONAL_2X2",
+  "STRATEGIC_DEAL_REVIEW",
+  "CUSTOMER_NEXT_STEP",
+  "DISCOVERY",
+  "TECHNICAL_VALIDATION",
+  "SECURITY_REVIEW",
+  "EXECUTIVE_SPONSOR_MEETING",
+  "RENEWAL_REVIEW",
+  "MUTUAL_ACTION_PLAN_CHECKPOINT",
+  "FORECAST_REVIEW",
+  "VP_OPERATING_REVIEW",
+  "CRO_OPERATING_REVIEW",
+  "CUSTOM",
+] as const;
+export const interventionTypes = [
+  "DEAL_RISK",
+  "SELLER_COACHING",
+  "COMMITMENT_SLIPPAGE",
+  "EXECUTIVE_ESCALATION",
+  "RESOURCE_DECISION",
+  "METHODOLOGY_GAP",
+  "TECHNICAL_BLOCKER",
+  "FORECAST_EXCEPTION",
+  "PARTNER_INTERVENTION",
+  "CROSS_FUNCTIONAL_COORDINATION",
+  "REVENUE_TEAM_COVERAGE_GAP",
+] as const;
+export type Visibility = "SYSTEM_ONLY" | "INTERNAL_ONLY" | "EXTERNAL_SHAREABLE";
 
-export interface PriorityInput{amount:number;daysToClose:number;blockerDays:number;overdueCommitments:number;executiveEngagementDeclining:boolean;methodologyGap:boolean;coverageGapCount:number;strategic:boolean}
-export function rankManagerIntervention(input:PriorityInput){const reasons:string[]=[];let score=0;if(input.amount>=10_000_000){score+=25;reasons.push(`$${(input.amount/1_000_000).toFixed(1)}M revenue exposure`)}else if(input.amount>=1_000_000){score+=15;reasons.push("material revenue exposure")}if(input.daysToClose<=45){score+=15;reasons.push(`${input.daysToClose} days to close or renewal`)}if(input.blockerDays>=14){score+=20;reasons.push(`blocker unresolved ${input.blockerDays} days`)}if(input.overdueCommitments){score+=Math.min(20,input.overdueCommitments*10);reasons.push(`${input.overdueCommitments} commitment${input.overdueCommitments===1?"":"s"} overdue`)}if(input.executiveEngagementDeclining){score+=10;reasons.push("executive engagement declining")}if(input.methodologyGap){score+=5;reasons.push("methodology evidence incomplete")}if(input.coverageGapCount){score+=Math.min(10,input.coverageGapCount*5);reasons.push(`${input.coverageGapCount} revenue-team coverage gap${input.coverageGapCount===1?"":"s"}`)}if(input.strategic){score+=5;reasons.push("strategic account")};return{score:Math.min(100,score),reasons}}
+export interface PriorityInput {
+  amount: number;
+  daysToClose: number;
+  blockerDays: number;
+  overdueCommitments: number;
+  executiveEngagementDeclining: boolean;
+  methodologyGap: boolean;
+  coverageGapCount: number;
+  indicatorRiskCount?: number;
+  strategic: boolean;
+}
+export function rankManagerIntervention(input: PriorityInput) {
+  const reasons: string[] = [];
+  let score = 0;
+  if (input.amount >= 10_000_000) {
+    score += 25;
+    reasons.push(`$${(input.amount / 1_000_000).toFixed(1)}M revenue exposure`);
+  } else if (input.amount >= 1_000_000) {
+    score += 15;
+    reasons.push("material revenue exposure");
+  }
+  if (input.daysToClose <= 45) {
+    score += 15;
+    reasons.push(`${input.daysToClose} days to close or renewal`);
+  }
+  if (input.blockerDays >= 14) {
+    score += 20;
+    reasons.push(`blocker unresolved ${input.blockerDays} days`);
+  }
+  if (input.overdueCommitments) {
+    score += Math.min(20, input.overdueCommitments * 10);
+    reasons.push(
+      `${input.overdueCommitments} commitment${input.overdueCommitments === 1 ? "" : "s"} overdue`,
+    );
+  }
+  if (input.executiveEngagementDeclining) {
+    score += 10;
+    reasons.push("executive engagement declining");
+  }
+  if (input.methodologyGap) {
+    score += 5;
+    reasons.push("methodology evidence incomplete");
+  }
+  if (input.coverageGapCount) {
+    score += Math.min(10, input.coverageGapCount * 5);
+    reasons.push(
+      `${input.coverageGapCount} revenue-team coverage gap${input.coverageGapCount === 1 ? "" : "s"}`,
+    );
+  }
+  if (input.indicatorRiskCount) {
+    score += Math.min(15, input.indicatorRiskCount * 5);
+    reasons.push(`${input.indicatorRiskCount} leading indicators deteriorated`);
+  }
+  if (input.strategic) {
+    score += 5;
+    reasons.push("strategic account");
+  }
+  return { score: Math.min(100, score), reasons };
+}
 
-export function getManagedSellerIds(repository:IdentityRepository,managerUserId:string,organizationId:string){return getDirectReports(repository,managerUserId,organizationId).map(user=>user.id)}
-export function hasManagementAuthority(repository:IdentityRepository,managerUserId:string,targetUserId:string,organizationId:string){return getManagerChain(repository,targetUserId,organizationId).some(user=>user.id===managerUserId)}
+export function getManagedSellerIds(
+  repository: IdentityRepository,
+  managerUserId: string,
+  organizationId: string,
+) {
+  return getDirectReports(repository, managerUserId, organizationId).map(
+    (user) => user.id,
+  );
+}
+export function hasManagementAuthority(
+  repository: IdentityRepository,
+  managerUserId: string,
+  targetUserId: string,
+  organizationId: string,
+) {
+  return getManagerChain(repository, targetUserId, organizationId).some(
+    (user) => user.id === managerUserId,
+  );
+}
 
-export interface OrchestrationContext{securityOrArchitectureBlocker?:boolean;roiBlocker?:boolean;renewalOrAdoptionRisk?:boolean;partnerDependency?:boolean;commercialBlocker?:boolean}
-export function recommendCoverage(repository:IdentityRepository,input:{organizationId:string;opportunityId:string;context:OrchestrationContext}){const coverage=getRevenueTeamCoverage(repository,input),required:ParticipationType[]=[];if(input.context.securityOrArchitectureBlocker)required.push("TECHNICAL_EXECUTIVE");if(input.context.roiBlocker)required.push("VALUE_ENGINEERING");if(input.context.renewalOrAdoptionRisk)required.push("CUSTOMER_SUCCESS");if(input.context.partnerDependency)required.push("PARTNER");if(input.context.commercialBlocker)required.push("COMMERCIAL");return getCoverageGaps(coverage,required).map(type=>({participationType:type,reason:type==="TECHNICAL_EXECUTIVE"?"Security or architecture risk needs senior technical involvement.":type==="VALUE_ENGINEERING"?"The business case needs value-engineering support.":type==="CUSTOMER_SUCCESS"?"Renewal or adoption risk needs customer-success context.":type==="PARTNER"?"The motion depends on partner execution.":"Complex pricing or packaging needs commercial support.",requiresApproval:true}))}
+export interface OrchestrationContext {
+  securityOrArchitectureBlocker?: boolean;
+  roiBlocker?: boolean;
+  renewalOrAdoptionRisk?: boolean;
+  partnerDependency?: boolean;
+  commercialBlocker?: boolean;
+}
+export function recommendCoverage(
+  repository: IdentityRepository,
+  input: {
+    organizationId: string;
+    opportunityId: string;
+    context: OrchestrationContext;
+  },
+) {
+  const coverage = getRevenueTeamCoverage(repository, input),
+    required: ParticipationType[] = [];
+  if (input.context.securityOrArchitectureBlocker)
+    required.push("TECHNICAL_EXECUTIVE");
+  if (input.context.roiBlocker) required.push("VALUE_ENGINEERING");
+  if (input.context.renewalOrAdoptionRisk) required.push("CUSTOMER_SUCCESS");
+  if (input.context.partnerDependency) required.push("PARTNER");
+  if (input.context.commercialBlocker) required.push("COMMERCIAL");
+  return getCoverageGaps(coverage, required).map((type) => ({
+    participationType: type,
+    reason:
+      type === "TECHNICAL_EXECUTIVE"
+        ? "Security or architecture risk needs senior technical involvement."
+        : type === "VALUE_ENGINEERING"
+          ? "The business case needs value-engineering support."
+          : type === "CUSTOMER_SUCCESS"
+            ? "Renewal or adoption risk needs customer-success context."
+            : type === "PARTNER"
+              ? "The motion depends on partner execution."
+              : "Complex pricing or packaging needs commercial support.",
+    requiresApproval: true,
+  }));
+}
 
-export function externalSafe<T extends {visibility:Visibility}>(items:T[]){return items.filter(item=>item.visibility==="EXTERNAL_SHAREABLE")}
-export function detectCommitmentSlippage<T extends {status:string;dueAt:string|null}>(items:T[],now=new Date()){return items.filter(item=>["OPEN","IN_PROGRESS","BLOCKED"].includes(item.status)&&item.dueAt&&Date.parse(item.dueAt)<now.getTime())}
-export function escalationEligibility(input:{amount:number;blockerDays:number;missedCommitments:number;managerInterventionCompleted:boolean;crossFunctionalReviewCompleted:boolean;riskImproved:boolean}){const reasons=[];if(input.amount>=10_000_000)reasons.push("strategic revenue exposure");if(input.blockerDays>=21)reasons.push(`blocker unresolved ${input.blockerDays} days`);if(input.missedCommitments>=2)reasons.push(`${input.missedCommitments} commitments missed`);if(input.managerInterventionCompleted)reasons.push("manager intervention completed");if(input.crossFunctionalReviewCompleted)reasons.push("cross-functional review completed");const eligible=reasons.length>=4&&!input.riskImproved;return{eligible,toLevel:eligible?"VP" as const:null,reasons}}
+export function externalSafe<T extends { visibility: Visibility }>(items: T[]) {
+  return items.filter((item) => item.visibility === "EXTERNAL_SHAREABLE");
+}
+export function detectCommitmentSlippage<
+  T extends { status: string; dueAt: string | null },
+>(items: T[], now = new Date()) {
+  return items.filter(
+    (item) =>
+      ["OPEN", "IN_PROGRESS", "BLOCKED"].includes(item.status) &&
+      item.dueAt &&
+      Date.parse(item.dueAt) < now.getTime(),
+  );
+}
+export function escalationEligibility(input: {
+  amount: number;
+  blockerDays: number;
+  missedCommitments: number;
+  managerInterventionCompleted: boolean;
+  crossFunctionalReviewCompleted: boolean;
+  riskImproved: boolean;
+}) {
+  const reasons = [];
+  if (input.amount >= 10_000_000) reasons.push("strategic revenue exposure");
+  if (input.blockerDays >= 21)
+    reasons.push(`blocker unresolved ${input.blockerDays} days`);
+  if (input.missedCommitments >= 2)
+    reasons.push(`${input.missedCommitments} commitments missed`);
+  if (input.managerInterventionCompleted)
+    reasons.push("manager intervention completed");
+  if (input.crossFunctionalReviewCompleted)
+    reasons.push("cross-functional review completed");
+  const eligible = reasons.length >= 4 && !input.riskImproved;
+  return { eligible, toLevel: eligible ? ("VP" as const) : null, reasons };
+}

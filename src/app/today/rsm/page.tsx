@@ -178,6 +178,28 @@ export default async function Page() {
           <p className="empty-brief">No material approvals are waiting.</p>
         )}
       </section>
+      <section className="rsm-section">
+        <h2>Coaching themes</h2>
+        <p className="section-note">
+          Evidence-backed themes for your direct reports, not a performance
+          leaderboard.
+        </p>
+        {brief.coachingInsights?.length ? (
+          brief.coachingInsights.map((insight) => (
+            <article className="brief-row" key={insight.id}>
+              <div>
+                <strong>
+                  {insight.display_name} · {insight.title}
+                </strong>
+                <small>{insight.insight}</small>
+              </div>
+              <span>{insight.suggested_action}</span>
+            </article>
+          ))
+        ) : (
+          <p className="empty-brief">No coaching themes require attention.</p>
+        )}
+      </section>
     </main>
   );
 }

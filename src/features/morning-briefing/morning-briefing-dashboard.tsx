@@ -18,6 +18,7 @@ import {
 import { humanWorkflowReducer, mergeHumanState } from "./state";
 import type { Tone } from "./types";
 import { useOptionalSession } from "@/auth/session-context";
+import type { LeadingIndicatorRecord } from "@/db/leading-indicator-repository";
 
 const navItems = [
   "AI Command Center",
@@ -796,14 +797,80 @@ function UpcomingCadences({ cadences }: { cadences: CadenceSummary[] }) {
   );
 }
 
+function LeadingIndicatorHealth({
+  indicators,
+  coachingInsights,
+}: {
+  indicators: LeadingIndicatorRecord[];
+  coachingInsights: Array<{
+    id: string;
+    title: string;
+    insight: string;
+    suggested_action: string;
+  }>;
+}) {
+  return (
+    <section
+      className="panel leading-health"
+      aria-labelledby="leading-health-title"
+    >
+      <div className="section-heading">
+        <div>
+          <h2 id="leading-health-title">Revenue execution health</h2>
+          <p>
+            Leading evidence behind your opportunities, not activity counts.
+          </p>
+        </div>
+        <span className="analysis-label">
+          <i /> Evidence grounded
+        </span>
+      </div>
+      {indicators.length ? (
+        <div className="leading-health-list">
+          {indicators.slice(0, 8).map((indicator) => (
+            <article key={indicator.id}>
+              <div>
+                <span>{indicator.indicator_type.replaceAll("_", " ")}</span>
+                <strong>{indicator.status.replaceAll("_", " ")}</strong>
+              </div>
+              <p>{indicator.rationale}</p>
+              <small>{indicator.evidence.slice(0, 2).join(" · ")}</small>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="feed-state">
+          <strong>No leading-indicator evidence yet</strong>
+          <p>AROS will show evidence as the revenue motion develops.</p>
+        </div>
+      )}
+      {coachingInsights.length ? (
+        <div className="leading-coaching">
+          <strong>Suggested next action</strong>
+          <p>{coachingInsights[0].suggested_action}</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function MorningBriefingDashboard({
   initialDecisions,
   assignedAccounts = [],
   cadences = [],
+  leadingIndicators = [],
+  coachingInsights = [],
 }: {
   initialDecisions: GovernedDecision[];
   assignedAccounts?: AssignedAccountSummary[];
   cadences?: CadenceSummary[];
+  leadingIndicators?: LeadingIndicatorRecord[];
+  coachingInsights?: Array<{
+    id: string;
+    title: string;
+    insight: string;
+    suggested_action: string;
+  }>;
 }) {
   const [humanState, dispatch] = useReducer(humanWorkflowReducer, {});
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -899,6 +966,10 @@ export function MorningBriefingDashboard({
             </p>
           )}
         </section>
+        <LeadingIndicatorHealth
+          indicators={leadingIndicators}
+          coachingInsights={coachingInsights}
+        />
         <div className="dashboard-grid">
           <IntelligenceFeed decisions={feed} onSelect={setSelectedId} />
           <aside className="right-rail">
