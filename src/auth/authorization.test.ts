@@ -1,22 +1,249 @@
-import {describe,expect,it} from "vitest";
-import {createDemoIdentityStore} from "./seed";import {MemoryIdentityRepository} from "./repository";import {getAllDescendants,getDirectReports,getManagerChain,getUserScope} from "./hierarchy";import {authorizePermission,authorizeResource,canViewAs} from "./authorization";import {permissions,todayPath} from "./permissions";import {hashPassword,verifyPassword} from "./password";import {authenticateCredentials,authenticateTenantCredentials} from "./authenticate";
-const setup=()=>{const repository=new MemoryIdentityRepository(createDemoIdentityStore());const user=(id:string)=>repository.findUserById(id)!;return{repository,user}};
-describe("authentication foundation",()=>{
- it("securely verifies password hashes",()=>{const hash=hashPassword("correct horse battery staple","test-salt");expect(hash).not.toContain("correct horse");expect(verifyPassword("correct horse battery staple",hash)).toBe(true);expect(verifyPassword("wrong password",hash)).toBe(false)});
- it("accepts valid login and rejects invalid login",()=>{const{repository}=setup();expect(authenticateCredentials(repository,"sarah.chen@demo.cognivit.ai","ArosDemo!2026")?.id).toBe("user-ae-sarah");expect(authenticateCredentials(repository,"sarah.chen@demo.cognivit.ai","incorrect!")).toBeNull()});
- it("limits tenant landing authentication to active members of the slugged tenant",()=>{const{repository}=setup();expect(authenticateTenantCredentials(repository,"sarah.chen@demo.cognivit.ai","ArosDemo!2026","cognivit-demo-enterprise")?.organization.id).toBe("org-cognivit-demo");expect(authenticateTenantCredentials(repository,"sarah.chen@demo.cognivit.ai","ArosDemo!2026","isolation-test")).toBeNull();expect(authenticateTenantCredentials(repository,"sarah.chen@demo.cognivit.ai","incorrect!","cognivit-demo-enterprise")).toBeNull()});
- it("persists and deletes a server-side session",()=>{const{repository}=setup(),session={id:"session-test",tokenHash:"opaque-hash",userId:"user-ae-sarah",organizationId:"org-cognivit-demo",viewAsRole:null,createdAt:new Date().toISOString(),lastSeenAt:new Date().toISOString(),expiresAt:new Date(Date.now()+10000).toISOString()} as const;repository.saveSession(session);expect(repository.findSessionByTokenHash("opaque-hash")?.userId).toBe("user-ae-sarah");repository.deleteSession(session.id);expect(repository.findSessionByTokenHash("opaque-hash")).toBeUndefined()});
- it("maps every stable role to Today",()=>expect(todayPath).toEqual(expect.objectContaining({SDR:"/today/sdr",AE:"/today/ae",RSM:"/today/rsm",SALES_ENGINEER:"/today/shared",SALES_ENGINEER_MANAGER:"/today/shared",PARTNER_SALES:"/today/partner",VP_SALES:"/today/vp-sales",CRO:"/today/cro"})));
+import { describe, expect, it } from "vitest";
+import { createDemoIdentityStore } from "./seed";
+import { MemoryIdentityRepository } from "./repository";
+import {
+  getAllDescendants,
+  getDirectReports,
+  getManagerChain,
+  getUserScope,
+} from "./hierarchy";
+import {
+  authorizePermission,
+  authorizeResource,
+  canViewAs,
+} from "./authorization";
+import { permissions, todayPath } from "./permissions";
+import { hashPassword, verifyPassword } from "./password";
+import {
+  authenticateCredentials,
+  authenticateTenantCredentials,
+} from "./authenticate";
+const setup = () => {
+  const repository = new MemoryIdentityRepository(createDemoIdentityStore());
+  const user = (id: string) => repository.findUserById(id)!;
+  return { repository, user };
+};
+describe("authentication foundation", () => {
+  it("securely verifies password hashes", () => {
+    const hash = hashPassword("correct horse battery staple", "test-salt");
+    expect(hash).not.toContain("correct horse");
+    expect(verifyPassword("correct horse battery staple", hash)).toBe(true);
+    expect(verifyPassword("wrong password", hash)).toBe(false);
+  });
+  it("accepts valid login and rejects invalid login", () => {
+    const { repository } = setup();
+    expect(
+      authenticateCredentials(
+        repository,
+        "sarah.chen@demo.cognivit.ai",
+        "ArosDemo!2026",
+      )?.id,
+    ).toBe("user-ae-sarah");
+    expect(
+      authenticateCredentials(
+        repository,
+        "sarah.chen@demo.cognivit.ai",
+        "incorrect!",
+      ),
+    ).toBeNull();
+  });
+  it("limits tenant landing authentication to active members of the slugged tenant", () => {
+    const { repository } = setup();
+    expect(
+      authenticateTenantCredentials(
+        repository,
+        "sarah.chen@demo.cognivit.ai",
+        "ArosDemo!2026",
+        "cognivit-demo-enterprise",
+      )?.organization.id,
+    ).toBe("org-cognivit-demo");
+    expect(
+      authenticateTenantCredentials(
+        repository,
+        "sarah.chen@demo.cognivit.ai",
+        "ArosDemo!2026",
+        "isolation-test",
+      ),
+    ).toBeNull();
+    expect(
+      authenticateTenantCredentials(
+        repository,
+        "sarah.chen@demo.cognivit.ai",
+        "incorrect!",
+        "cognivit-demo-enterprise",
+      ),
+    ).toBeNull();
+  });
+  it("persists and deletes a server-side session", () => {
+    const { repository } = setup(),
+      session = {
+        id: "session-test",
+        tokenHash: "opaque-hash",
+        userId: "user-ae-sarah",
+        organizationId: "org-cognivit-demo",
+        viewAsRole: null,
+        viewAsUserId: null,
+        createdAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 10000).toISOString(),
+      } as const;
+    repository.saveSession(session);
+    expect(repository.findSessionByTokenHash("opaque-hash")?.userId).toBe(
+      "user-ae-sarah",
+    );
+    repository.deleteSession(session.id);
+    expect(repository.findSessionByTokenHash("opaque-hash")).toBeUndefined();
+  });
+  it("maps every stable role to Today", () =>
+    expect(todayPath).toEqual(
+      expect.objectContaining({
+        SDR: "/today/sdr",
+        AE: "/today/ae",
+        RSM: "/today/rsm",
+        SALES_ENGINEER: "/today/shared",
+        SALES_ENGINEER_MANAGER: "/today/shared",
+        PARTNER_SALES: "/today/partner",
+        VP_SALES: "/today/vp-sales",
+        CRO: "/today/cro",
+      }),
+    ));
 });
-describe("hierarchy",()=>{
- it("resolves parallel reports, descendants, and manager chain",()=>{const{repository}=setup();expect(getDirectReports(repository,"user-rsm-mark").map(item=>item.id).sort()).toEqual(["user-ae-daniel","user-ae-sarah"]);expect(getAllDescendants(repository,"user-vp-jennifer").map(item=>item.id)).toEqual(expect.arrayContaining(["user-rsm-mark","user-ae-sarah"]));expect(getDirectReports(repository,"user-sdr-manager-david").map(item=>item.id)).toEqual(["user-sdr-alex"]);expect(getManagerChain(repository,"user-se-raj").map(item=>item.id)).toEqual(["user-se-manager-anita","user-cro-michael"])});
- it("excludes unrelated teams",()=>{const{repository}=setup();expect(getUserScope(repository,"user-rsm-other")?.userIds).not.toContain("user-ae-sarah")});
- it("keeps CRO tenant-isolated",()=>{const{repository}=setup(),scope=getUserScope(repository,"user-cro-michael")!;expect(scope.accountIds).toContain("acct-coinbase");expect(scope.accountIds).not.toContain("acct-other-tenant")});
+describe("hierarchy", () => {
+  it("gives the Demo AE jurisdiction over Coinbase and Franklin Templeton", () => {
+    const { repository } = setup(),
+      scope = getUserScope(repository, "user-ae-sarah")!;
+    expect(scope.accountIds).toEqual(
+      expect.arrayContaining(["acct-coinbase", "acct-franklin"]),
+    );
+    expect(scope.accountIds).not.toContain("acct-nvidia");
+  });
+  it("resolves parallel reports, descendants, and manager chain", () => {
+    const { repository } = setup();
+    expect(
+      getDirectReports(repository, "user-rsm-mark")
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual(["user-ae-daniel", "user-ae-sarah"]);
+    expect(
+      getAllDescendants(repository, "user-vp-jennifer").map((item) => item.id),
+    ).toEqual(expect.arrayContaining(["user-rsm-mark", "user-ae-sarah"]));
+    expect(
+      getDirectReports(repository, "user-sdr-manager-david").map(
+        (item) => item.id,
+      ),
+    ).toEqual(["user-sdr-alex"]);
+    expect(
+      getManagerChain(repository, "user-se-raj").map((item) => item.id),
+    ).toEqual(["user-se-manager-anita", "user-cro-michael"]);
+  });
+  it("excludes unrelated teams", () => {
+    const { repository } = setup();
+    expect(getUserScope(repository, "user-rsm-other")?.userIds).not.toContain(
+      "user-ae-sarah",
+    );
+  });
+  it("keeps CRO tenant-isolated", () => {
+    const { repository } = setup(),
+      scope = getUserScope(repository, "user-cro-michael")!;
+    expect(scope.accountIds).toContain("acct-coinbase");
+    expect(scope.accountIds).not.toContain("acct-other-tenant");
+  });
 });
-describe("authorization",()=>{
- it("blocks unassigned AE access and allows the manager",()=>{const{repository,user}=setup();expect(authorizeResource(repository,user("user-ae-sarah"),permissions.accountRead,"account","acct-nvidia","org-cognivit-demo")).toBe(false);expect(authorizeResource(repository,user("user-rsm-mark"),permissions.accountRead,"account","acct-coinbase","org-cognivit-demo")).toBe(true)});
- it("keeps partner access explicit",()=>{const{repository,user}=setup();expect(authorizeResource(repository,user("user-partner-priya"),permissions.accountRead,"account","acct-coinbase","org-cognivit-demo")).toBe(true);expect(authorizeResource(repository,user("user-partner-priya"),permissions.accountRead,"account","acct-paypal","org-cognivit-demo")).toBe(false);expect(authorizePermission(user("user-partner-priya"),permissions.sellerCoach)).toBe(false)});
- it("denies cross-tenant access",()=>{const{repository,user}=setup();expect(authorizeResource(repository,user("user-cro-michael"),permissions.accountRead,"account","acct-other-tenant","org-isolation-test")).toBe(false)});
- it("enforces capabilities",()=>{const{user}=setup();expect(authorizePermission(user("user-ae-sarah"),permissions.managerDecisionApprove)).toBe(false);expect(authorizePermission(user("user-rsm-mark"),permissions.managerDecisionApprove)).toBe(true);expect(authorizePermission(user("user-se-raj"),permissions.managerDecisionApprove)).toBe(false);expect(authorizePermission(user("user-se-manager-anita"),permissions.managerDecisionApprove)).toBe(false)});
- it("limits View As without changing persisted role",()=>{const{user}=setup(),normal={...user("user-ae-sarah"),isDemoUser:false};expect(canViewAs(user("user-ae-sarah"))).toBe(true);expect(canViewAs(normal)).toBe(false);expect(user("user-ae-sarah").role).toBe("AE")});
+describe("authorization", () => {
+  it("blocks unassigned AE access and allows the manager", () => {
+    const { repository, user } = setup();
+    expect(
+      authorizeResource(
+        repository,
+        user("user-ae-sarah"),
+        permissions.accountRead,
+        "account",
+        "acct-nvidia",
+        "org-cognivit-demo",
+      ),
+    ).toBe(false);
+    expect(
+      authorizeResource(
+        repository,
+        user("user-rsm-mark"),
+        permissions.accountRead,
+        "account",
+        "acct-coinbase",
+        "org-cognivit-demo",
+      ),
+    ).toBe(true);
+  });
+  it("keeps partner access explicit", () => {
+    const { repository, user } = setup();
+    expect(
+      authorizeResource(
+        repository,
+        user("user-partner-priya"),
+        permissions.accountRead,
+        "account",
+        "acct-coinbase",
+        "org-cognivit-demo",
+      ),
+    ).toBe(true);
+    expect(
+      authorizeResource(
+        repository,
+        user("user-partner-priya"),
+        permissions.accountRead,
+        "account",
+        "acct-paypal",
+        "org-cognivit-demo",
+      ),
+    ).toBe(false);
+    expect(
+      authorizePermission(user("user-partner-priya"), permissions.sellerCoach),
+    ).toBe(false);
+  });
+  it("denies cross-tenant access", () => {
+    const { repository, user } = setup();
+    expect(
+      authorizeResource(
+        repository,
+        user("user-cro-michael"),
+        permissions.accountRead,
+        "account",
+        "acct-other-tenant",
+        "org-isolation-test",
+      ),
+    ).toBe(false);
+  });
+  it("enforces capabilities", () => {
+    const { user } = setup();
+    expect(
+      authorizePermission(
+        user("user-ae-sarah"),
+        permissions.managerDecisionApprove,
+      ),
+    ).toBe(false);
+    expect(
+      authorizePermission(
+        user("user-rsm-mark"),
+        permissions.managerDecisionApprove,
+      ),
+    ).toBe(true);
+    expect(
+      authorizePermission(
+        user("user-se-raj"),
+        permissions.managerDecisionApprove,
+      ),
+    ).toBe(false);
+    expect(
+      authorizePermission(
+        user("user-se-manager-anita"),
+        permissions.managerDecisionApprove,
+      ),
+    ).toBe(false);
+  });
+  it("limits View As without changing persisted role", () => {
+    const { user } = setup(),
+      normal = { ...user("user-ae-sarah"), isDemoUser: false };
+    expect(canViewAs(user("user-ae-sarah"))).toBe(true);
+    expect(canViewAs(normal)).toBe(false);
+    expect(user("user-ae-sarah").role).toBe("AE");
+  });
 });

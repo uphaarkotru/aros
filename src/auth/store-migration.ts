@@ -133,9 +133,35 @@ export function migrateIdentityStore(
         assignment.partnerUserId,
       ].filter(Boolean) as string[];
       return ids.flatMap((userId, memberIndex) => {
-        const user = users.find((item) => item.id === userId),types = user?.role === "FIELD_CTO" ? ["TECHNICAL_EXECUTIVE","EXECUTIVE_SPONSOR"] as const : [user?.role === "PARTNER_SALES" ? "PARTNER" : user?.role === "SDR" ? "PROSPECTING" : user?.role === "SALES_ENGINEER" ? "SALES_ENGINEERING" : user?.role === "CUSTOMER_SUCCESS" ? "CUSTOMER_SUCCESS" : user?.role === "VALUE_ENGINEERING" ? "VALUE_ENGINEERING" : "PRIMARY_SELLER"] as const;
-        return types.map((type,typeIndex)=>({
-          id: `revenue-team-${index}-${memberIndex}${typeIndex?`-${typeIndex}`:""}`,
+        const user = users.find((item) => item.id === userId),
+          types =
+            user?.role === "FIELD_CTO"
+              ? (["TECHNICAL_EXECUTIVE", "EXECUTIVE_SPONSOR"] as const)
+              : ([
+                  user?.role === "PARTNER_SALES"
+                    ? "PARTNER"
+                    : user?.role === "SDR"
+                      ? "PROSPECTING"
+                      : user?.role === "SALES_ENGINEER"
+                        ? "SALES_ENGINEERING"
+                        : user?.role === "CUSTOMER_SUCCESS"
+                          ? "CUSTOMER_SUCCESS"
+                          : user?.role === "VALUE_ENGINEERING"
+                            ? "VALUE_ENGINEERING"
+                            : user?.role === "PRODUCT_SPECIALIST"
+                              ? "PRODUCT_SPECIALIST"
+                              : user?.role === "SERVICES"
+                                ? "SERVICES"
+                                : user?.role === "COMMERCIAL"
+                                  ? "COMMERCIAL"
+                                  : user?.role === "FIELD_MARKETING"
+                                    ? "MARKETING"
+                                    : user?.role === "REVOPS"
+                                      ? "OVERLAY"
+                                      : "PRIMARY_SELLER",
+                ] as const);
+        return types.map((type, typeIndex) => ({
+          id: `revenue-team-${index}-${memberIndex}${typeIndex ? `-${typeIndex}` : ""}`,
           organizationId: assignment.organizationId,
           accountId:
             assignment.resourceType === "account"

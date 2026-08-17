@@ -1,23 +1,254 @@
 import type { PoolClient } from "pg";
 import { query, transaction } from "./client";
 
-export interface AccountRecord { id:string;organizationId:string;externalId:string|null;name:string;domain:string|null;segment:string|null;status:string;createdAt:string;updatedAt:string }
-export interface OpportunityRecord { id:string;organizationId:string;accountId:string;externalId:string|null;name:string;stage:string|null;amount:number|null;currency:string|null;closeDate:string|null;status:string;ownerMembershipId:string|null;createdAt:string;updatedAt:string }
-export interface SignalRecord { id:string;organizationId:string;accountId:string|null;opportunityId:string|null;type:string;source:string;severity:string|null;confidence:number|null;payload:Record<string,unknown>;observedAt:string;createdAt:string }
-export interface ActionDecisionRecord { id:string;organizationId:string;accountId:string|null;opportunityId:string|null;assignedMembershipId:string|null;createdByMembershipId:string|null;type:string;recommendation:string;status:string;evidence:unknown[];metadata:Record<string,unknown>;createdAt:string;updatedAt:string }
-export interface RevenueTwinRecord { id:string;organizationId:string;accountId:string;healthState:string|null;riskState:string|null;lifecycleState:string|null;state:Record<string,unknown>;createdAt:string;updatedAt:string }
-
-const iso=(value:Date|string|null)=>value instanceof Date?value.toISOString():value;
-export class PostgresRevenueRepository {
-  async listAccounts(organizationId:string):Promise<AccountRecord[]>{const {rows}=await query(`SELECT id,organization_id AS "organizationId",external_id AS "externalId",name,domain,segment,status,created_at AS "createdAt",updated_at AS "updatedAt" FROM accounts WHERE organization_id=$1 ORDER BY name`,[organizationId]);return rows.map(row=>({...row,createdAt:iso(row.createdAt)!,updatedAt:iso(row.updatedAt)!})) as AccountRecord[]}
-  async getAccount(organizationId:string,accountId:string):Promise<AccountRecord|null>{const {rows}=await query(`SELECT id,organization_id AS "organizationId",external_id AS "externalId",name,domain,segment,status,created_at AS "createdAt",updated_at AS "updatedAt" FROM accounts WHERE organization_id=$1 AND id=$2`,[organizationId,accountId]);const row=rows[0];return row?{...row,createdAt:iso(row.createdAt)!,updatedAt:iso(row.updatedAt)!} as AccountRecord:null}
-  async getOpportunity(organizationId:string,opportunityId:string):Promise<OpportunityRecord|null>{const {rows}=await query(`SELECT id,organization_id AS "organizationId",account_id AS "accountId",external_id AS "externalId",name,stage,amount::float8 AS amount,currency,close_date::text AS "closeDate",status,owner_membership_id AS "ownerMembershipId",created_at AS "createdAt",updated_at AS "updatedAt" FROM opportunities WHERE organization_id=$1 AND id=$2`,[organizationId,opportunityId]);const row=rows[0];return row?{...row,createdAt:iso(row.createdAt)!,updatedAt:iso(row.updatedAt)!} as OpportunityRecord:null}
-  async getTwinByAccount(organizationId:string,accountId:string):Promise<RevenueTwinRecord|null>{const {rows}=await query(`SELECT id,organization_id AS "organizationId",account_id AS "accountId",health_state AS "healthState",risk_state AS "riskState",lifecycle_state AS "lifecycleState",state,created_at AS "createdAt",updated_at AS "updatedAt" FROM revenue_digital_twins WHERE organization_id=$1 AND account_id=$2`,[organizationId,accountId]);const row=rows[0];return row?{...row,createdAt:iso(row.createdAt)!,updatedAt:iso(row.updatedAt)!} as RevenueTwinRecord:null}
-  async getTwin(organizationId:string,twinId:string):Promise<RevenueTwinRecord|null>{const {rows}=await query(`SELECT id,organization_id AS "organizationId",account_id AS "accountId",health_state AS "healthState",risk_state AS "riskState",lifecycle_state AS "lifecycleState",state,created_at AS "createdAt",updated_at AS "updatedAt" FROM revenue_digital_twins WHERE organization_id=$1 AND id=$2`,[organizationId,twinId]);const row=rows[0];return row?{...row,createdAt:iso(row.createdAt)!,updatedAt:iso(row.updatedAt)!} as RevenueTwinRecord:null}
-  async listSignals(organizationId:string,accountId?:string):Promise<SignalRecord[]>{const {rows}=await query(`SELECT id,organization_id AS "organizationId",account_id AS "accountId",opportunity_id AS "opportunityId",type,source,severity,confidence::float8 AS confidence,payload,observed_at AS "observedAt",created_at AS "createdAt" FROM revenue_signals WHERE organization_id=$1 AND ($2::text IS NULL OR account_id=$2) ORDER BY observed_at DESC`,[organizationId,accountId??null]);return rows.map(row=>({...row,observedAt:iso(row.observedAt)!,createdAt:iso(row.createdAt)!})) as SignalRecord[]}
-  async getAction(organizationId:string,id:string):Promise<ActionDecisionRecord|null>{const {rows}=await query(`SELECT id,organization_id AS "organizationId",account_id AS "accountId",opportunity_id AS "opportunityId",assigned_membership_id AS "assignedMembershipId",created_by_membership_id AS "createdByMembershipId",type,recommendation,status,evidence,metadata,created_at AS "createdAt",updated_at AS "updatedAt" FROM action_decisions WHERE organization_id=$1 AND id=$2`,[organizationId,id]);const row=rows[0];return row?{...row,createdAt:iso(row.createdAt)!,updatedAt:iso(row.updatedAt)!} as ActionDecisionRecord:null}
-  async listActions(organizationId:string,accountIds:string[]):Promise<ActionDecisionRecord[]>{if(!accountIds.length)return[];const {rows}=await query(`SELECT id,organization_id AS "organizationId",account_id AS "accountId",opportunity_id AS "opportunityId",assigned_membership_id AS "assignedMembershipId",created_by_membership_id AS "createdByMembershipId",type,recommendation,status,evidence,metadata,created_at AS "createdAt",updated_at AS "updatedAt" FROM action_decisions WHERE organization_id=$1 AND account_id=ANY($2::text[]) ORDER BY updated_at DESC`,[organizationId,accountIds]);return rows.map(row=>({...row,createdAt:iso(row.createdAt)!,updatedAt:iso(row.updatedAt)!})) as ActionDecisionRecord[]}
-  async updateAction(organizationId:string,id:string,patch:{status?:string;recommendation?:string},actorMembershipId:string|null){return transaction(async client=>{const {rows}=await client.query(`UPDATE action_decisions SET status=COALESCE($3,status),recommendation=COALESCE($4,recommendation),updated_at=now() WHERE organization_id=$1 AND id=$2 RETURNING *`,[organizationId,id,patch.status??null,patch.recommendation??null]);if(!rows[0])return null;await client.query(`INSERT INTO revenue_digital_twin_events(id,organization_id,revenue_digital_twin_id,actor_membership_id,event_type,payload,occurred_at) SELECT $1,$2,id,$3,'DECISION_UPDATED',$4::jsonb,now() FROM revenue_digital_twins WHERE organization_id=$2 AND account_id=$5`,[`event-${id}-${Date.now()}`,organizationId,actorMembershipId,JSON.stringify(patch),rows[0].account_id]);return rows[0]})}
-  async createOpportunityWithTwin(input:{id:string;organizationId:string;accountId:string;name:string;ownerMembershipId:string|null;twinId:string}){return transaction(async(client:PoolClient)=>{await client.query(`INSERT INTO opportunities(id,organization_id,account_id,name,owner_membership_id) VALUES($1,$2,$3,$4,$5)`,[input.id,input.organizationId,input.accountId,input.name,input.ownerMembershipId]);await client.query(`INSERT INTO revenue_digital_twins(id,organization_id,account_id,lifecycle_state) VALUES($1,$2,$3,'OPPORTUNITY') ON CONFLICT(organization_id,account_id) DO NOTHING`,[input.twinId,input.organizationId,input.accountId]);})}
+export interface AccountRecord {
+  id: string;
+  organizationId: string;
+  externalId: string | null;
+  name: string;
+  domain: string | null;
+  segment: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
 }
-export const revenueRepository=new PostgresRevenueRepository();
+export interface OpportunityRecord {
+  id: string;
+  organizationId: string;
+  accountId: string;
+  externalId: string | null;
+  name: string;
+  stage: string | null;
+  amount: number | null;
+  currency: string | null;
+  closeDate: string | null;
+  status: string;
+  ownerMembershipId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SignalRecord {
+  id: string;
+  organizationId: string;
+  accountId: string | null;
+  opportunityId: string | null;
+  type: string;
+  source: string;
+  severity: string | null;
+  confidence: number | null;
+  payload: Record<string, unknown>;
+  observedAt: string;
+  createdAt: string;
+}
+export interface ActionDecisionRecord {
+  id: string;
+  organizationId: string;
+  accountId: string | null;
+  opportunityId: string | null;
+  assignedMembershipId: string | null;
+  createdByMembershipId: string | null;
+  type: string;
+  recommendation: string;
+  status: string;
+  evidence: unknown[];
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface RevenueTwinRecord {
+  id: string;
+  organizationId: string;
+  accountId: string;
+  healthState: string | null;
+  riskState: string | null;
+  lifecycleState: string | null;
+  state: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const iso = (value: Date | string | null) =>
+  value instanceof Date ? value.toISOString() : value;
+export class PostgresRevenueRepository {
+  async listAccounts(organizationId: string): Promise<AccountRecord[]> {
+    const { rows } = await query(
+      `SELECT id,organization_id AS "organizationId",external_id AS "externalId",name,domain,segment,status,created_at AS "createdAt",updated_at AS "updatedAt" FROM accounts WHERE organization_id=$1 ORDER BY name`,
+      [organizationId],
+    );
+    return rows.map((row) => ({
+      ...row,
+      createdAt: iso(row.createdAt)!,
+      updatedAt: iso(row.updatedAt)!,
+    })) as AccountRecord[];
+  }
+  async getAccount(
+    organizationId: string,
+    accountId: string,
+  ): Promise<AccountRecord | null> {
+    const { rows } = await query(
+      `SELECT id,organization_id AS "organizationId",external_id AS "externalId",name,domain,segment,status,created_at AS "createdAt",updated_at AS "updatedAt" FROM accounts WHERE organization_id=$1 AND id=$2`,
+      [organizationId, accountId],
+    );
+    const row = rows[0];
+    return row
+      ? ({
+          ...row,
+          createdAt: iso(row.createdAt)!,
+          updatedAt: iso(row.updatedAt)!,
+        } as AccountRecord)
+      : null;
+  }
+  async getOpportunity(
+    organizationId: string,
+    opportunityId: string,
+  ): Promise<OpportunityRecord | null> {
+    const { rows } = await query(
+      `SELECT id,organization_id AS "organizationId",account_id AS "accountId",external_id AS "externalId",name,stage,amount::float8 AS amount,currency,close_date::text AS "closeDate",status,owner_membership_id AS "ownerMembershipId",created_at AS "createdAt",updated_at AS "updatedAt" FROM opportunities WHERE organization_id=$1 AND id=$2`,
+      [organizationId, opportunityId],
+    );
+    const row = rows[0];
+    return row
+      ? ({
+          ...row,
+          createdAt: iso(row.createdAt)!,
+          updatedAt: iso(row.updatedAt)!,
+        } as OpportunityRecord)
+      : null;
+  }
+  async getTwinByAccount(
+    organizationId: string,
+    accountId: string,
+  ): Promise<RevenueTwinRecord | null> {
+    const { rows } = await query(
+      `SELECT id,organization_id AS "organizationId",account_id AS "accountId",health_state AS "healthState",risk_state AS "riskState",lifecycle_state AS "lifecycleState",state,created_at AS "createdAt",updated_at AS "updatedAt" FROM revenue_digital_twins WHERE organization_id=$1 AND account_id=$2`,
+      [organizationId, accountId],
+    );
+    const row = rows[0];
+    return row
+      ? ({
+          ...row,
+          createdAt: iso(row.createdAt)!,
+          updatedAt: iso(row.updatedAt)!,
+        } as RevenueTwinRecord)
+      : null;
+  }
+  async getTwin(
+    organizationId: string,
+    twinId: string,
+  ): Promise<RevenueTwinRecord | null> {
+    const { rows } = await query(
+      `SELECT id,organization_id AS "organizationId",account_id AS "accountId",health_state AS "healthState",risk_state AS "riskState",lifecycle_state AS "lifecycleState",state,created_at AS "createdAt",updated_at AS "updatedAt" FROM revenue_digital_twins WHERE organization_id=$1 AND id=$2`,
+      [organizationId, twinId],
+    );
+    const row = rows[0];
+    return row
+      ? ({
+          ...row,
+          createdAt: iso(row.createdAt)!,
+          updatedAt: iso(row.updatedAt)!,
+        } as RevenueTwinRecord)
+      : null;
+  }
+  async listSignals(
+    organizationId: string,
+    accountId?: string,
+  ): Promise<SignalRecord[]> {
+    const { rows } = await query(
+      `SELECT id,organization_id AS "organizationId",account_id AS "accountId",opportunity_id AS "opportunityId",type,source,severity,confidence::float8 AS confidence,payload,observed_at AS "observedAt",created_at AS "createdAt" FROM revenue_signals WHERE organization_id=$1 AND ($2::text IS NULL OR account_id=$2) ORDER BY observed_at DESC`,
+      [organizationId, accountId ?? null],
+    );
+    return rows.map((row) => ({
+      ...row,
+      observedAt: iso(row.observedAt)!,
+      createdAt: iso(row.createdAt)!,
+    })) as SignalRecord[];
+  }
+  async getAction(
+    organizationId: string,
+    id: string,
+  ): Promise<ActionDecisionRecord | null> {
+    const { rows } = await query(
+      `SELECT id,organization_id AS "organizationId",account_id AS "accountId",opportunity_id AS "opportunityId",assigned_membership_id AS "assignedMembershipId",created_by_membership_id AS "createdByMembershipId",type,recommendation,status,evidence,metadata,created_at AS "createdAt",updated_at AS "updatedAt" FROM action_decisions WHERE organization_id=$1 AND id=$2`,
+      [organizationId, id],
+    );
+    const row = rows[0];
+    return row
+      ? ({
+          ...row,
+          createdAt: iso(row.createdAt)!,
+          updatedAt: iso(row.updatedAt)!,
+        } as ActionDecisionRecord)
+      : null;
+  }
+  async listActions(
+    organizationId: string,
+    accountIds: string[],
+  ): Promise<ActionDecisionRecord[]> {
+    if (!accountIds.length) return [];
+    const { rows } = await query(
+      `SELECT id,organization_id AS "organizationId",account_id AS "accountId",opportunity_id AS "opportunityId",assigned_membership_id AS "assignedMembershipId",created_by_membership_id AS "createdByMembershipId",type,recommendation,status,evidence,metadata,created_at AS "createdAt",updated_at AS "updatedAt" FROM action_decisions WHERE organization_id=$1 AND account_id=ANY($2::text[]) AND type<>'CADENCE_RECOMMENDATION' ORDER BY updated_at DESC`,
+      [organizationId, accountIds],
+    );
+    return rows.map((row) => ({
+      ...row,
+      createdAt: iso(row.createdAt)!,
+      updatedAt: iso(row.updatedAt)!,
+    })) as ActionDecisionRecord[];
+  }
+  async updateAction(
+    organizationId: string,
+    id: string,
+    patch: { status?: string; recommendation?: string },
+    actorMembershipId: string | null,
+  ) {
+    return transaction(async (client) => {
+      const { rows } = await client.query(
+        `UPDATE action_decisions SET status=COALESCE($3,status),recommendation=COALESCE($4,recommendation),updated_at=now() WHERE organization_id=$1 AND id=$2 RETURNING *`,
+        [
+          organizationId,
+          id,
+          patch.status ?? null,
+          patch.recommendation ?? null,
+        ],
+      );
+      if (!rows[0]) return null;
+      await client.query(
+        `INSERT INTO revenue_digital_twin_events(id,organization_id,revenue_digital_twin_id,actor_membership_id,event_type,payload,occurred_at) SELECT $1,$2,id,$3,'DECISION_UPDATED',$4::jsonb,now() FROM revenue_digital_twins WHERE organization_id=$2 AND account_id=$5`,
+        [
+          `event-${id}-${Date.now()}`,
+          organizationId,
+          actorMembershipId,
+          JSON.stringify(patch),
+          rows[0].account_id,
+        ],
+      );
+      return rows[0];
+    });
+  }
+  async createOpportunityWithTwin(input: {
+    id: string;
+    organizationId: string;
+    accountId: string;
+    name: string;
+    ownerMembershipId: string | null;
+    twinId: string;
+  }) {
+    return transaction(async (client: PoolClient) => {
+      await client.query(
+        `INSERT INTO opportunities(id,organization_id,account_id,name,owner_membership_id) VALUES($1,$2,$3,$4,$5)`,
+        [
+          input.id,
+          input.organizationId,
+          input.accountId,
+          input.name,
+          input.ownerMembershipId,
+        ],
+      );
+      await client.query(
+        `INSERT INTO revenue_digital_twins(id,organization_id,account_id,lifecycle_state) VALUES($1,$2,$3,'OPPORTUNITY') ON CONFLICT(organization_id,account_id) DO NOTHING`,
+        [input.twinId, input.organizationId, input.accountId],
+      );
+    });
+  }
+}
+export const revenueRepository = new PostgresRevenueRepository();

@@ -26,6 +26,7 @@ export async function createSession(
     userId: user.id,
     organizationId,
     viewAsRole: null,
+    viewAsUserId: null,
     createdAt: now.toISOString(),
     lastSeenAt: now.toISOString(),
     expiresAt: expires.toISOString(),
@@ -87,9 +88,18 @@ export async function getAuthenticatedIdentity() {
           .read()
           .users.find(
             (candidate) =>
+              (!session.viewAsUserId ||
+                candidate.id === session.viewAsUserId) &&
               getMembership(identityRepository, candidate.id, organization.id)
                 ?.status === "ACTIVE" &&
-              candidate.role === activeViewAsRole &&
+              primaryRoleContext(
+                identityRepository,
+                getMembership(
+                  identityRepository,
+                  candidate.id,
+                  organization.id,
+                )!.id,
+              ).template?.code === activeViewAsRole &&
               candidate.isDemoUser &&
               candidate.status === "ACTIVE",
           )
@@ -124,12 +134,42 @@ export async function getAuthenticatedIdentity() {
     applicationMode: getApplicationMode(),
     isViewingAs: Boolean(activeViewAsRole),
     viewAsRole: activeViewAsRole,
+    viewAsUserId: activeViewAsRole ? (viewUser?.id ?? null) : null,
+    simulatableUsers: identityRepository
+      .read()
+      .users.flatMap((candidate) => {
+        const candidateMembership = getMembership(
+          identityRepository,
+          candidate.id,
+          organization.id,
+        );
+        const candidateRole = candidateMembership
+          ? primaryRoleContext(identityRepository, candidateMembership.id)
+              .template?.code
+          : null;
+        return candidate.isDemoUser &&
+          candidate.status === "ACTIVE" &&
+          candidateMembership?.status === "ACTIVE" &&
+          candidateRole
+          ? [
+              {
+                id: candidate.id,
+                displayName: candidate.displayName,
+                role: candidateRole,
+              },
+            ]
+          : [];
+      })
+      .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     effectiveRole,
     viewUser: toPublicUser(viewUser ?? user),
     primaryRole: primary.definition ?? null,
   };
 }
-export async function setViewAsRole(role: RevenueRole | null) {
+export async function setViewAsRole(
+  role: RevenueRole | null,
+  viewAsUserId: string | null = null,
+) {
   if (!isDemoApplication()) return false;
   await identityRepository.refresh?.();
   const jar = await cookies(),
@@ -157,9 +197,32 @@ export async function setViewAsRole(role: RevenueRole | null) {
       )
   )
     return false;
+  if (role && viewAsUserId) {
+    const candidate = identityRepository.findUserById(viewAsUserId),
+      candidateMembership = candidate
+        ? getMembership(
+            identityRepository,
+            candidate.id,
+            session.organizationId,
+          )
+        : undefined,
+      candidateRole = candidateMembership
+        ? primaryRoleContext(identityRepository, candidateMembership.id)
+            .template?.code
+        : null;
+    if (
+      !candidate ||
+      !candidate.isDemoUser ||
+      candidate.status !== "ACTIVE" ||
+      candidateMembership?.status !== "ACTIVE" ||
+      candidateRole !== role
+    )
+      return false;
+  }
   identityRepository.saveSession({
     ...session,
     viewAsRole: role,
+    viewAsUserId: role ? viewAsUserId : null,
     lastSeenAt: new Date().toISOString(),
   });
   await flushIdentityRepository();

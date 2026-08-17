@@ -174,9 +174,14 @@ async function main() {
           item.createdAt,
         ],
       );
-    for (const item of store.relationships)
+    for (const item of store.relationships) {
+      if (item.relationshipType === "REPORTS_TO" && item.isPrimary)
+        await client.query(
+          `UPDATE organization_relationships SET is_primary=false,effective_to=COALESCE(effective_to,$4),updated_at=$4 WHERE organization_id=$1 AND source_membership_id=$2 AND relationship_type='REPORTS_TO' AND is_primary AND effective_to IS NULL AND id<>$3`,
+          [item.organizationId, item.sourceMembershipId, item.id, now],
+        );
       await client.query(
-        `INSERT INTO organization_relationships(id,organization_id,source_membership_id,target_membership_id,relationship_type,is_primary,effective_from,effective_to,metadata,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO NOTHING`,
+        `INSERT INTO organization_relationships(id,organization_id,source_membership_id,target_membership_id,relationship_type,is_primary,effective_from,effective_to,metadata,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET target_membership_id=excluded.target_membership_id,relationship_type=excluded.relationship_type,is_primary=excluded.is_primary,effective_to=excluded.effective_to,metadata=excluded.metadata,updated_at=excluded.updated_at`,
         [
           item.id,
           item.organizationId,
@@ -191,6 +196,769 @@ async function main() {
           item.updatedAt,
         ],
       );
+    }
+  }
+
+  async function seedCadence(client: PoolClient) {
+    const organizationId = "org-cognivit-demo",
+      accountId = "acct-coinbase",
+      opportunityId = "opp-coinbase-renewal",
+      manager = "membership-org-cognivit-demo-user-rsm-mark",
+      seller = "membership-org-cognivit-demo-user-ae-sarah",
+      se = "membership-org-cognivit-demo-user-se-raj",
+      seManager = "membership-org-cognivit-demo-user-se-manager-anita",
+      sdr = "membership-org-cognivit-demo-user-sdr-alex",
+      partner = "membership-org-cognivit-demo-user-partner-priya",
+      fieldCto = "membership-org-cognivit-demo-user-field-cto-david",
+      customerSuccess = "membership-org-cognivit-demo-user-cs-maria",
+      valueEngineer = "membership-org-cognivit-demo-user-value-jason",
+      productSpecialist = "membership-org-cognivit-demo-user-product-nina",
+      services = "membership-org-cognivit-demo-user-services-elena",
+      revops = "membership-org-cognivit-demo-user-revops-owen",
+      commercial = "membership-org-cognivit-demo-user-commercial-claire",
+      fieldMarketing = "membership-org-cognivit-demo-user-marketing-maya",
+      cro = "membership-org-cognivit-demo-user-cro-michael",
+      vp = "membership-org-cognivit-demo-user-vp-jennifer",
+      otherManager = "membership-org-cognivit-demo-user-rsm-other",
+      daniel = "membership-org-cognivit-demo-user-ae-daniel",
+      priyaAe = "membership-org-cognivit-demo-user-ae-priya";
+    const templates = [
+      ["MANAGER_1_ON_1", "Manager 1:1", "INTERNAL", "WEEKLY"],
+      ["SE_MANAGER_1_ON_1", "SE Manager 1:1", "INTERNAL", "WEEKLY"],
+      ["AE_SE_SYNC", "AE–SE Sync", "INTERNAL", "WEEKLY"],
+      ["AE_SDR_SYNC", "AE–SDR Sync", "INTERNAL", "WEEKLY"],
+      ["AE_PARTNER_SYNC", "AE–Partner Sync", "PARTNER", "BIWEEKLY"],
+      ["CROSS_FUNCTIONAL_2X2", "Cross-functional 2x2", "INTERNAL", "AS_NEEDED"],
+      [
+        "STRATEGIC_DEAL_REVIEW",
+        "Strategic Deal Review",
+        "INTERNAL",
+        "AS_NEEDED",
+      ],
+      ["CUSTOMER_NEXT_STEP", "Customer Next-Step", "CUSTOMER", "AS_NEEDED"],
+      ["DISCOVERY", "Discovery", "PROSPECT", "AS_NEEDED"],
+      ["TECHNICAL_VALIDATION", "Technical Validation", "CUSTOMER", "AS_NEEDED"],
+      ["SECURITY_REVIEW", "Security Review", "CUSTOMER", "WEEKLY"],
+      [
+        "EXECUTIVE_SPONSOR_MEETING",
+        "Executive Sponsor Meeting",
+        "EXECUTIVE",
+        "AS_NEEDED",
+      ],
+      ["RENEWAL_REVIEW", "Renewal Review", "CUSTOMER", "MONTHLY"],
+      [
+        "MUTUAL_ACTION_PLAN_CHECKPOINT",
+        "Mutual Action Plan Checkpoint",
+        "CUSTOMER",
+        "BIWEEKLY",
+      ],
+      ["CUSTOM", "Custom Cadence", "INTERNAL", "AS_NEEDED"],
+    ];
+    for (const [code, name, scope, frequency] of templates)
+      await client.query(
+        `INSERT INTO cadence_templates(id,organization_id,code,name,scope,suggested_frequency,participant_expectations,sections,is_system_seeded,is_active,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,'[]','[]',true,true,$7,$7) ON CONFLICT(organization_id,code) DO UPDATE SET name=excluded.name,scope=excluded.scope,suggested_frequency=excluded.suggested_frequency,is_active=true,updated_at=excluded.updated_at`,
+        [
+          `cadence-template-${code.toLowerCase().replaceAll("_", "-")}`,
+          organizationId,
+          code,
+          name,
+          scope,
+          frequency,
+          now,
+        ],
+      );
+    const session = (
+      id: string,
+      code: string,
+      scope: string,
+      status: string,
+      internal: string,
+      external: string | null,
+      scheduledAt = now,
+      sessionAccountId = accountId,
+      sessionOpportunityId = opportunityId,
+    ) =>
+      client.query(
+        `INSERT INTO cadence_sessions(id,organization_id,template_id,status,scope,account_id,opportunity_id,scheduled_at,completed_at,preparation_summary,internal_summary,external_safe_summary,idempotency_key,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,CASE WHEN $4='COMPLETED' THEN $8::timestamptz ELSE NULL END,$9,$10,$11,$1,$8::timestamptz,$8::timestamptz) ON CONFLICT(id) DO UPDATE SET status=excluded.status,scheduled_at=excluded.scheduled_at,completed_at=excluded.completed_at,preparation_summary=excluded.preparation_summary,internal_summary=excluded.internal_summary,external_safe_summary=excluded.external_safe_summary,updated_at=excluded.updated_at`,
+        [
+          id,
+          organizationId,
+          `cadence-template-${code.toLowerCase().replaceAll("_", "-")}`,
+          status,
+          scope,
+          sessionAccountId,
+          sessionOpportunityId,
+          scheduledAt,
+          "AROS identified the security blocker, slipping commitments, stakeholder movement, and coverage facts.",
+          internal,
+          external,
+        ],
+      );
+    await session(
+      "cadence-coinbase-ae-se",
+      "AE_SE_SYNC",
+      "INTERNAL",
+      "COMPLETED",
+      "Security review stalled; executive engagement is declining. Keep forecast concern internal.",
+      null,
+    );
+    await session(
+      "cadence-coinbase-security",
+      "SECURITY_REVIEW",
+      "CUSTOMER",
+      "COMPLETED",
+      "Internal risk assessment: renewal exposure and escalation strategy remain confidential.",
+      "Coinbase and CogniVit agreed that the updated security architecture response is due August 11, with the next checkpoint August 18.",
+    );
+    await session(
+      "cadence-mark-sarah-prior",
+      "MANAGER_1_ON_1",
+      "INTERNAL",
+      "COMPLETED",
+      "Coach Sarah on evidence-based executive re-engagement and follow through on Coinbase security commitments.",
+      null,
+    );
+    await session(
+      "cadence-coinbase-ae-sdr-prior",
+      "AE_SDR_SYNC",
+      "INTERNAL",
+      "COMPLETED",
+      "Sarah and Alex aligned on executive persona coverage and a clean handoff into the renewal motion.",
+      null,
+      "2026-08-12T16:00:00Z",
+    );
+    await session(
+      "cadence-coinbase-ae-partner-prior",
+      "AE_PARTNER_SYNC",
+      "PARTNER",
+      "COMPLETED",
+      "Sarah and Priya agreed to validate marketplace timing and identify a partner executive introduction.",
+      null,
+      "2026-08-13T18:00:00Z",
+    );
+    await session(
+      "cadence-mark-sarah-next",
+      "MANAGER_1_ON_1",
+      "INTERNAL",
+      "PREPARED",
+      "Follow up on the Coinbase intervention, prior decisions, overdue commitments, and whether risk improved.",
+      null,
+      "2026-08-18T16:00:00Z",
+    );
+    await session(
+      "cadence-coinbase-2x2",
+      "CROSS_FUNCTIONAL_2X2",
+      "INTERNAL",
+      "PREPARED",
+      "Resolve technical ownership, executive engagement, and escalation conditions.",
+      null,
+      "2026-08-18T18:00:00Z",
+    );
+    await session(
+      "cadence-anita-raj-next",
+      "SE_MANAGER_1_ON_1",
+      "INTERNAL",
+      "PREPARED",
+      "Review Raj's security workload, the overdue architecture response, resource constraints, and technical coaching follow-ups.",
+      null,
+      "2026-08-19T16:30:00Z",
+    );
+    await session(
+      "cadence-coinbase-ae-se-next",
+      "AE_SE_SYNC",
+      "INTERNAL",
+      "PREPARED",
+      "Align commercial and technical owners before the next Coinbase security checkpoint.",
+      null,
+      "2026-08-19T18:00:00Z",
+    );
+    await session(
+      "cadence-coinbase-ae-sdr",
+      "AE_SDR_SYNC",
+      "INTERNAL",
+      "PREPARED",
+      "Review executive-contact gaps, outreach response signals, and the handoff into the renewal motion.",
+      null,
+      "2026-08-20T16:00:00Z",
+    );
+    await session(
+      "cadence-coinbase-ae-partner",
+      "AE_PARTNER_SYNC",
+      "PARTNER",
+      "PREPARED",
+      "Align the marketplace co-sell motion, partner introduction, and joint executive engagement plan.",
+      null,
+      "2026-08-20T18:00:00Z",
+    );
+    await session(
+      "cadence-coinbase-security-next",
+      "SECURITY_REVIEW",
+      "CUSTOMER",
+      "PREPARED",
+      "Prepare the shared checkpoint from open security requirements and mutual commitments; keep forecast and coaching context internal.",
+      "Proposed agenda: confirm open requirements, architecture response owner, customer feedback date, and next checkpoint.",
+      "2026-08-21T17:00:00Z",
+    );
+    await session(
+      "cadence-paypal-mark-daniel-next",
+      "MANAGER_1_ON_1",
+      "INTERNAL",
+      "PREPARED",
+      "Review PayPal expansion evidence, next-step quality, and Daniel's commitments.",
+      null,
+      "2026-08-21T16:00:00Z",
+      "acct-paypal",
+      "opp-pp",
+    );
+    await session(
+      "cadence-nvidia-olivia-priya-next",
+      "MANAGER_1_ON_1",
+      "INTERNAL",
+      "PREPARED",
+      "Review the NVIDIA global rollout, executive briefing readiness, and next commitments.",
+      null,
+      "2026-08-21T19:00:00Z",
+      "acct-nvidia",
+      "opp-nv",
+    );
+    await session(
+      "cadence-coinbase-strategic-team-next",
+      "STRATEGIC_DEAL_REVIEW",
+      "INTERNAL",
+      "PREPARED",
+      "Coordinate the full Coinbase revenue team around security, value, services, commercial, and stakeholder workstreams.",
+      null,
+      "2026-08-22T17:00:00Z",
+    );
+    await session(
+      "cadence-coinbase-executive-next",
+      "EXECUTIVE_SPONSOR_MEETING",
+      "EXECUTIVE",
+      "PREPARED",
+      "Align leadership and technical executive support before customer executive re-engagement.",
+      null,
+      "2026-08-22T19:00:00Z",
+    );
+    const participants: string[][] = [
+      [
+        "cadence-participant-ae-se-sarah",
+        "cadence-coinbase-ae-se",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-ae-se-raj",
+        "cadence-coinbase-ae-se",
+        se,
+        "SALES_ENGINEERING",
+      ],
+      [
+        "cadence-participant-security-sarah",
+        "cadence-coinbase-security",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-security-raj",
+        "cadence-coinbase-security",
+        se,
+        "SALES_ENGINEERING",
+      ],
+      [
+        "cadence-participant-2x2-sarah",
+        "cadence-coinbase-2x2",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-2x2-raj",
+        "cadence-coinbase-2x2",
+        se,
+        "SALES_ENGINEERING",
+      ],
+      [
+        "cadence-participant-2x2-mark",
+        "cadence-coinbase-2x2",
+        manager,
+        "MANAGER",
+      ],
+      [
+        "cadence-participant-2x2-anita",
+        "cadence-coinbase-2x2",
+        seManager,
+        "SE_MANAGER",
+      ],
+      [
+        "cadence-participant-1x1-mark",
+        "cadence-mark-sarah-prior",
+        manager,
+        "MANAGER",
+      ],
+      [
+        "cadence-participant-1x1-sarah",
+        "cadence-mark-sarah-prior",
+        seller,
+        "DIRECT_REPORT",
+      ],
+      [
+        "cadence-participant-next-1x1-mark",
+        "cadence-mark-sarah-next",
+        manager,
+        "MANAGER",
+      ],
+      [
+        "cadence-participant-next-1x1-sarah",
+        "cadence-mark-sarah-next",
+        seller,
+        "DIRECT_REPORT",
+      ],
+      [
+        "cadence-participant-ae-sdr-prior-sarah",
+        "cadence-coinbase-ae-sdr-prior",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-ae-sdr-prior-alex",
+        "cadence-coinbase-ae-sdr-prior",
+        sdr,
+        "PROSPECTING",
+      ],
+      [
+        "cadence-participant-ae-partner-prior-sarah",
+        "cadence-coinbase-ae-partner-prior",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-ae-partner-prior-priya",
+        "cadence-coinbase-ae-partner-prior",
+        partner,
+        "PARTNER",
+      ],
+      [
+        "cadence-participant-se-1x1-anita",
+        "cadence-anita-raj-next",
+        seManager,
+        "SE_MANAGER",
+      ],
+      [
+        "cadence-participant-se-1x1-raj",
+        "cadence-anita-raj-next",
+        se,
+        "DIRECT_REPORT",
+      ],
+      [
+        "cadence-participant-ae-se-next-sarah",
+        "cadence-coinbase-ae-se-next",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-ae-se-next-raj",
+        "cadence-coinbase-ae-se-next",
+        se,
+        "SALES_ENGINEERING",
+      ],
+      [
+        "cadence-participant-ae-sdr-sarah",
+        "cadence-coinbase-ae-sdr",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-ae-sdr-alex",
+        "cadence-coinbase-ae-sdr",
+        sdr,
+        "PROSPECTING",
+      ],
+      [
+        "cadence-participant-ae-partner-sarah",
+        "cadence-coinbase-ae-partner",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-ae-partner-priya",
+        "cadence-coinbase-ae-partner",
+        partner,
+        "PARTNER",
+      ],
+      [
+        "cadence-participant-security-next-sarah",
+        "cadence-coinbase-security-next",
+        seller,
+        "PRIMARY_SELLER",
+      ],
+      [
+        "cadence-participant-security-next-raj",
+        "cadence-coinbase-security-next",
+        se,
+        "SALES_ENGINEERING",
+      ],
+      [
+        "cadence-participant-paypal-mark",
+        "cadence-paypal-mark-daniel-next",
+        manager,
+        "MANAGER",
+      ],
+      [
+        "cadence-participant-paypal-daniel",
+        "cadence-paypal-mark-daniel-next",
+        daniel,
+        "DIRECT_REPORT",
+      ],
+      [
+        "cadence-participant-nvidia-olivia",
+        "cadence-nvidia-olivia-priya-next",
+        otherManager,
+        "MANAGER",
+      ],
+      [
+        "cadence-participant-nvidia-priya",
+        "cadence-nvidia-olivia-priya-next",
+        priyaAe,
+        "DIRECT_REPORT",
+      ],
+      ...[
+        [seller, "PRIMARY_SELLER"],
+        [fieldCto, "TECHNICAL_EXECUTIVE"],
+        [customerSuccess, "CUSTOMER_SUCCESS"],
+        [valueEngineer, "VALUE_ENGINEERING"],
+        [productSpecialist, "PRODUCT_SPECIALIST"],
+        [services, "SERVICES"],
+        [revops, "REVOPS"],
+        [commercial, "COMMERCIAL"],
+        [fieldMarketing, "FIELD_MARKETING"],
+      ].map(([membership, role]) => [
+        `cadence-participant-strategic-${membership.split("-").at(-1)}`,
+        "cadence-coinbase-strategic-team-next",
+        membership,
+        role,
+      ]),
+      [
+        "cadence-participant-executive-cro",
+        "cadence-coinbase-executive-next",
+        cro,
+        "EXECUTIVE_SPONSOR",
+      ],
+      [
+        "cadence-participant-executive-vp",
+        "cadence-coinbase-executive-next",
+        vp,
+        "REVENUE_LEADERSHIP",
+      ],
+      [
+        "cadence-participant-executive-field-cto",
+        "cadence-coinbase-executive-next",
+        fieldCto,
+        "TECHNICAL_EXECUTIVE",
+      ],
+    ];
+    for (const [id, cadence, membership, role] of participants)
+      await client.query(
+        `INSERT INTO cadence_participants(id,organization_id,cadence_session_id,membership_id,participant_role,required,attended,created_at) SELECT $1,$2,$3,$4,$5,true,CASE WHEN status='COMPLETED' THEN true ELSE NULL END,$6 FROM cadence_sessions WHERE organization_id=$2 AND id=$3 ON CONFLICT(id) DO UPDATE SET attended=excluded.attended`,
+        [id, organizationId, cadence, membership, role, now],
+      );
+    await client.query(
+      `INSERT INTO cadence_participants(id,organization_id,cadence_session_id,external_stakeholder_id,participant_role,required,attended,created_at) SELECT 'cadence-participant-security-customer',$1,'cadence-coinbase-security',id,'CUSTOMER_SECURITY',true,true,$2 FROM revenue_stakeholders WHERE organization_id=$1 AND account_id=$3 ORDER BY CASE WHEN lower(title) LIKE '%security%' THEN 0 ELSE 1 END LIMIT 1 ON CONFLICT(id) DO NOTHING`,
+      [organizationId, now, accountId],
+    );
+    await client.query(
+      `INSERT INTO cadence_participants(id,organization_id,cadence_session_id,external_stakeholder_id,participant_role,required,attended,created_at) SELECT 'cadence-participant-security-next-customer',$1,'cadence-coinbase-security-next',id,'CUSTOMER_SECURITY',true,false,$2 FROM revenue_stakeholders WHERE organization_id=$1 AND account_id=$3 ORDER BY CASE WHEN lower(title) LIKE '%security%' THEN 0 ELSE 1 END LIMIT 1 ON CONFLICT(id) DO NOTHING`,
+      [organizationId, now, accountId],
+    );
+    const agenda = [
+      [
+        "agenda-coinbase-security",
+        "cadence-coinbase-ae-se",
+        "TECHNICAL_BLOCKER",
+        100,
+        "Security review stalled",
+        "Security deliverable is overdue and the renewal is approaching.",
+        "Confirm technical owner, evidence required, and next customer checkpoint.",
+        "Initiate cross-functional 2x2",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-coinbase-external",
+        "cadence-coinbase-security",
+        "NEXT_STEP",
+        90,
+        "Agree security response milestone",
+        "Both teams need a dated, mutually understood next step.",
+        "Confirm requirements, owners, delivery date, and checkpoint.",
+        null,
+        "EXTERNAL_SHAREABLE",
+      ],
+      [
+        "agenda-coinbase-2x2",
+        "cadence-coinbase-2x2",
+        "CROSS_FUNCTIONAL_COORDINATION",
+        100,
+        "Resolve Coinbase intervention plan",
+        "Commercial and technical risk remain unresolved after the AE–SE sync.",
+        "Assign functional commitments and define escalation condition.",
+        "Approve executive re-engagement plan",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-coinbase-1x1-follow-up",
+        "cadence-mark-sarah-next",
+        "INTERVENTION_FOLLOW_UP",
+        100,
+        "Coinbase intervention follow-up",
+        "The prior manager decision and security commitments remain unresolved.",
+        "Review prior commitments, current risk, and whether the 2x2 improved the Twin.",
+        "Decide whether VP escalation should proceed",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-anita-raj-workload",
+        "cadence-anita-raj-next",
+        "TECHNICAL_WORKLOAD",
+        95,
+        "Coinbase security commitment is overdue",
+        "The architecture response remains open while Raj supports multiple technical workstreams.",
+        "Review workload, unblock evidence collection, and confirm the technical owner.",
+        "Decide whether additional technical capacity is required",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-ae-se-next-security",
+        "cadence-coinbase-ae-se-next",
+        "TECHNICAL_BLOCKER",
+        100,
+        "Close the security-response gap",
+        "The customer checkpoint is approaching and the prior deliverable slipped.",
+        "Reconcile open requirements, response evidence, owners, and dates.",
+        "Commit to the response delivery date",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-ae-sdr-executive",
+        "cadence-coinbase-ae-sdr",
+        "STAKEHOLDER_COVERAGE",
+        88,
+        "Executive engagement is declining",
+        "Recent engagement signals show a 42% decline and missing executive response.",
+        "Review target personas, outreach evidence, and the handoff plan.",
+        "Choose the next executive outreach path",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-ae-partner-marketplace",
+        "cadence-coinbase-ae-partner",
+        "PARTNER_INTERVENTION",
+        82,
+        "Activate the co-sell path",
+        "Partner coverage exists but the marketplace and introduction milestones are not dated.",
+        "Confirm partner influence, introduction owner, and joint execution milestone.",
+        "Assign the partner introduction commitment",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-security-next-requirements",
+        "cadence-coinbase-security-next",
+        "SECURITY_CHECKPOINT",
+        100,
+        "Confirm open security requirements",
+        "The prior checkpoint produced an overdue seller response and pending customer feedback.",
+        "Review only mutually shareable requirements, owners, and dates.",
+        "Agree the next checkpoint and acceptance criteria",
+        "EXTERNAL_SHAREABLE",
+      ],
+      [
+        "agenda-paypal-manager-next",
+        "cadence-paypal-mark-daniel-next",
+        "OPPORTUNITY_PROGRESSION",
+        86,
+        "Turn PayPal expansion interest into a dated next step",
+        "The expansion signal is strong, but human commitments and a discovery milestone need alignment.",
+        "Review buyer evidence, next-step quality, and the owner for discovery preparation.",
+        "Agree the next customer milestone and owner",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-nvidia-manager-next",
+        "cadence-nvidia-olivia-priya-next",
+        "EXECUTIVE_ENGAGEMENT",
+        90,
+        "Prepare the NVIDIA executive briefing",
+        "The global rollout can accelerate if the executive discussion produces a clear decision path.",
+        "Review stakeholder context, unresolved commitments, and the desired meeting outcome.",
+        "Confirm briefing owner and follow-up commitments",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-strategic-team-next",
+        "cadence-coinbase-strategic-team-next",
+        "CROSS_FUNCTIONAL_COORDINATION",
+        96,
+        "Align the complete Coinbase revenue team",
+        "Security, value, customer success, services, commercial, and engagement workstreams must converge on one plan.",
+        "Review each function's evidence, blockers, and next commitment.",
+        "Assign functional owners and dated outcomes",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-executive-team-next",
+        "cadence-coinbase-executive-next",
+        "EXECUTIVE_ESCALATION",
+        94,
+        "Plan customer executive re-engagement",
+        "Executive engagement is declining while the strategic renewal remains exposed.",
+        "Align the executive message, technical posture, and escalation boundaries.",
+        "Approve an executive re-engagement plan",
+        "INTERNAL_ONLY",
+      ],
+    ];
+    for (const row of agenda)
+      await client.query(
+        `INSERT INTO cadence_agenda_items(id,organization_id,cadence_session_id,type,priority,title,rationale,recommended_discussion,recommended_decision,status,visibility,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'PROPOSED',$10,$11,$11) ON CONFLICT(id) DO UPDATE SET rationale=excluded.rationale,updated_at=excluded.updated_at`,
+        [row[0], organizationId, ...row.slice(1), now],
+      );
+    const commitments = [
+      [
+        "commitment-coinbase-security-response",
+        "cadence-coinbase-ae-se",
+        se,
+        "Updated security architecture response",
+        "2026-08-11T17:00:00Z",
+        "OPEN",
+        "Unblock customer security review",
+        "INTERNAL_ONLY",
+        "HIGH",
+      ],
+      [
+        "commitment-coinbase-exec-plan",
+        "cadence-mark-sarah-prior",
+        seller,
+        "Prepare evidence-based executive re-engagement plan",
+        "2026-08-13T17:00:00Z",
+        "OPEN",
+        "Secure executive sponsor meeting",
+        "INTERNAL_ONLY",
+        "HIGH",
+      ],
+      [
+        "commitment-coinbase-customer-feedback",
+        "cadence-coinbase-security",
+        null,
+        "Customer security team returns consolidated feedback",
+        "2026-08-18T17:00:00Z",
+        "OPEN",
+        "Confirm remaining security requirements",
+        "EXTERNAL_SHAREABLE",
+        "HIGH",
+      ],
+      [
+        "commitment-coinbase-sdr-executive-map",
+        "cadence-coinbase-ae-sdr-prior",
+        sdr,
+        "Map two additional executive stakeholders and document response signals",
+        "2026-08-19T17:00:00Z",
+        "IN_PROGRESS",
+        "Restore executive coverage for the renewal",
+        "INTERNAL_ONLY",
+        "MEDIUM",
+      ],
+      [
+        "commitment-coinbase-partner-introduction",
+        "cadence-coinbase-ae-partner-prior",
+        partner,
+        "Secure a partner executive introduction for Coinbase",
+        "2026-08-20T17:00:00Z",
+        "OPEN",
+        "Create an additional executive engagement path",
+        "INTERNAL_ONLY",
+        "MEDIUM",
+      ],
+    ];
+    for (const [
+      id,
+      cadence,
+      owner,
+      description,
+      due,
+      status,
+      outcome,
+      visibility,
+      impact,
+    ] of commitments)
+      await client.query(
+        `INSERT INTO commitments(id,organization_id,cadence_session_id,account_id,opportunity_id,owner_membership_id,description,due_at,status,expected_outcome,visibility,impact,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13) ON CONFLICT(id) DO UPDATE SET status=excluded.status,due_at=excluded.due_at,updated_at=excluded.updated_at`,
+        [
+          id,
+          organizationId,
+          cadence,
+          accountId,
+          opportunityId,
+          owner,
+          description,
+          due,
+          status,
+          outcome,
+          visibility,
+          impact,
+          now,
+        ],
+      );
+    await client.query(
+      `INSERT INTO cadence_blockers(id,organization_id,cadence_session_id,account_id,opportunity_id,type,severity,description,owner_membership_id,status,visibility,first_observed_at,created_at,updated_at) VALUES('blocker-coinbase-security',$1,'cadence-coinbase-security',$2,$3,'SECURITY','CRITICAL','Security architecture review remains unresolved',$4,'OPEN','EXTERNAL_SHAREABLE','2026-07-27T16:00:00Z',$5,$5) ON CONFLICT(id) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at`,
+      [organizationId, accountId, opportunityId, se, now],
+    );
+    await client.query(
+      `INSERT INTO manager_interventions(id,organization_id,manager_membership_id,seller_membership_id,account_id,opportunity_id,type,status,priority_score,severity,summary,rationale,evidence,recommended_action,created_at,updated_at) VALUES('intervention-coinbase-security',$1,$2,$3,$4,$5,'CROSS_FUNCTIONAL_COORDINATION','OPEN',95,'CRITICAL','Coinbase security review needs manager intervention','$22.4M renewal; security review stalled; two commitments slipping; executive engagement declining; renewal approaching',$6,'Initiate cross-functional 2x2',$7,$7) ON CONFLICT(id) DO UPDATE SET priority_score=excluded.priority_score,rationale=excluded.rationale,status='OPEN',updated_at=excluded.updated_at`,
+      [
+        organizationId,
+        manager,
+        seller,
+        accountId,
+        opportunityId,
+        json([
+          "$22.4M revenue exposure",
+          "security blocker open 18 days",
+          "2 commitments overdue",
+          "executive engagement declining",
+          "renewal within 45 days",
+        ]),
+        now,
+      ],
+    );
+    await client.query(
+      `DELETE FROM action_decisions WHERE organization_id=$1 AND id='decision-coinbase-2x2' AND type='CADENCE_RECOMMENDATION'`,
+      [organizationId],
+    );
+    await client.query(
+      `INSERT INTO escalations(id,organization_id,account_id,opportunity_id,cadence_session_id,type,severity,from_level,to_level,reason,evidence,status,created_at) VALUES('escalation-coinbase-vp-eligible',$1,$2,$3,'cadence-coinbase-2x2','UNRESOLVED_STRATEGIC_RISK','HIGH','CROSS_FUNCTIONAL','VP','Security blocker remains unresolved after seller, manager, and cross-functional intervention',$4,'ELIGIBLE',$5) ON CONFLICT(organization_id,opportunity_id,to_level,type) WHERE opportunity_id IS NOT NULL AND status IN('ELIGIBLE','PENDING','ACKNOWLEDGED') DO UPDATE SET status=excluded.status,evidence=excluded.evidence`,
+      [
+        organizationId,
+        accountId,
+        opportunityId,
+        json([
+          "$22.4M renewal",
+          "blocker open 21 days",
+          "2 missed commitments",
+          "manager intervention completed",
+          "2x2 prepared",
+        ]),
+        now,
+      ],
+    );
+    await client.query(
+      `INSERT INTO revenue_digital_twin_events(id,organization_id,revenue_digital_twin_id,actor_membership_id,event_type,payload,occurred_at,created_at) SELECT 'twin-event-coinbase-commitment-slipped',$1,id,$2,'COMMITMENT_MISSED',$3,'2026-08-14T16:00:00Z',$4 FROM revenue_digital_twins WHERE organization_id=$1 AND account_id=$5 ON CONFLICT(id) DO NOTHING`,
+      [
+        organizationId,
+        se,
+        json({
+          commitmentId: "commitment-coinbase-security-response",
+          daysOverdue: 3,
+        }),
+        now,
+        accountId,
+      ],
+    );
   }
 
   async function ensureTenant(
@@ -345,6 +1113,10 @@ async function main() {
           now,
         ],
       );
+    await client.query(
+      `INSERT INTO opportunities(id,organization_id,account_id,external_id,name,stage,amount,currency,close_date,status,owner_membership_id,created_at,updated_at) VALUES('opp-coinbase-renewal','org-cognivit-demo','acct-coinbase','opp-coinbase-renewal','Coinbase Renewal','Security Review',22400000,'USD','2026-10-15','OPEN','membership-org-cognivit-demo-user-ae-sarah',$1,$1) ON CONFLICT(id) DO UPDATE SET name=excluded.name,stage=excluded.stage,amount=excluded.amount,close_date=excluded.close_date,owner_membership_id=excluded.owner_membership_id,updated_at=excluded.updated_at`,
+      [now],
+    );
     const acmeMember = await ensureTenant(
         client,
         "org-acme",
@@ -414,6 +1186,7 @@ async function main() {
     await client.query("BEGIN");
     await seedIdentity(client);
     await seedRevenue(client);
+    await seedCadence(client);
     await client.query("COMMIT");
     console.log(
       "Seeded relational identity and deterministic revenue tenants.",

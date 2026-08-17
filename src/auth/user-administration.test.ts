@@ -1,9 +1,94 @@
-import {describe,expect,it} from "vitest";
-import {authenticateCredentials} from "./authenticate";
-import {MemoryIdentityRepository} from "./repository";
-import {createDemoIdentityStore} from "./seed";
-import {createOrganizationUser,updateOrganizationUser} from "./user-administration";
+import { describe, expect, it } from "vitest";
+import { authenticateCredentials } from "./authenticate";
+import { MemoryIdentityRepository } from "./repository";
+import { createDemoIdentityStore } from "./seed";
+import {
+  createOrganizationUser,
+  canServeAsReportingManager,
+  parseUserVersion,
+  toOrganizationAdminUser,
+  updateOrganizationUser,
+} from "./user-administration";
 
-const setup=()=>{const repository=new MemoryIdentityRepository(createDemoIdentityStore());const user=(id:string)=>repository.findUserById(id)!;return{repository,user}};
-const input={email:"new.seller@example.com",firstName:"New",lastName:"Seller",role:"AE" as const,managerUserId:"user-rsm-mark",status:"ACTIVE" as const,password:"SecurePass!1"};
-describe("organization user administration",()=>{it("allows an administrator to create and update a tenant user",()=>{const{repository,user}=setup();const created=createOrganizationUser(repository,user("user-org-admin"),input);expect(created.ok).toBe(true);if(!created.ok)return;expect(authenticateCredentials(repository,input.email,input.password)?.id).toBe(created.user.id);const updated=updateOrganizationUser(repository,user("user-org-admin"),created.user.id,{...input,role:"SDR",managerUserId:"user-vp-jennifer",password:undefined});expect(updated.ok&&updated.user.role).toBe("SDR");expect(updated.ok&&updated.user.managerUserId).toBe("user-vp-jennifer")});it("rejects non-admin and cyclic reporting assignments",()=>{const{repository,user}=setup();expect(createOrganizationUser(repository,user("user-ae-sarah"),input)).toEqual({ok:false,error:"Organization administrator access is required."});const result=updateOrganizationUser(repository,user("user-org-admin"),"user-cro-michael",{...input,email:"michael.roberts@demo.cognivit.ai",managerUserId:"user-ae-sarah",password:undefined});expect(result).toEqual({ok:false,error:"That reporting assignment would create a cycle."})})});
+const setup = () => {
+  const repository = new MemoryIdentityRepository(createDemoIdentityStore());
+  const user = (id: string) => repository.findUserById(id)!;
+  return { repository, user };
+};
+const input = {
+  email: "new.seller@example.com",
+  firstName: "New",
+  lastName: "Seller",
+  role: "AE" as const,
+  managerUserId: "user-rsm-mark",
+  status: "ACTIVE" as const,
+  password: "SecurePass!1",
+};
+describe("organization user administration", () => {
+  it("accepts valid concurrency versions and rejects values that become NaN", () => {
+    expect(parseUserVersion(3)).toBe(3);
+    expect(parseUserVersion("3")).toBe(3);
+    expect(parseUserVersion(undefined)).toBeNull();
+    expect(parseUserVersion("NaN")).toBeNull();
+    expect(parseUserVersion(0)).toBeNull();
+  });
+  it("only offers semantic management roles as reporting managers", () => {
+    expect(canServeAsReportingManager("AE")).toBe(false);
+    expect(canServeAsReportingManager("RSM")).toBe(true);
+    expect(canServeAsReportingManager("SALES_ENGINEER_MANAGER")).toBe(true);
+  });
+  it("allows an administrator to create and update a tenant user", () => {
+    const { repository, user } = setup();
+    const created = createOrganizationUser(
+      repository,
+      user("user-org-admin"),
+      input,
+    );
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(
+      authenticateCredentials(repository, input.email, input.password)?.id,
+    ).toBe(created.user.id);
+    const updated = updateOrganizationUser(
+      repository,
+      user("user-org-admin"),
+      created.user.id,
+      {
+        ...input,
+        role: "SDR",
+        managerUserId: "user-vp-jennifer",
+        password: undefined,
+      },
+    );
+    expect(updated.ok && updated.user.role).toBe("SDR");
+    expect(updated.ok && updated.user.managerUserId).toBe("user-vp-jennifer");
+    expect(
+      toOrganizationAdminUser(repository, created.user, "org-cognivit-demo")
+        .managerUserId,
+    ).toBe("user-vp-jennifer");
+  });
+  it("rejects non-admin and cyclic reporting assignments", () => {
+    const { repository, user } = setup();
+    expect(
+      createOrganizationUser(repository, user("user-ae-sarah"), input),
+    ).toEqual({
+      ok: false,
+      error: "Organization administrator access is required.",
+    });
+    const result = updateOrganizationUser(
+      repository,
+      user("user-org-admin"),
+      "user-cro-michael",
+      {
+        ...input,
+        email: "michael.roberts@demo.cognivit.ai",
+        managerUserId: "user-ae-sarah",
+        password: undefined,
+      },
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: "That reporting assignment would create a cycle.",
+    });
+  });
+});

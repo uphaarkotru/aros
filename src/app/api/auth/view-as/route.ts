@@ -19,9 +19,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
   const role = parseRole((body as Record<string, unknown>)?.role);
+  const rawUserId = (body as Record<string, unknown>)?.userId;
+  const userId =
+    typeof rawUserId === "string" && rawUserId.trim() ? rawUserId.trim() : null;
   if (role === undefined)
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
-  if (!(await setViewAsRole(role)))
+  if (!(await setViewAsRole(role, userId)))
     return NextResponse.json(
       { error: "View As is unavailable" },
       { status: 403 },
@@ -29,8 +32,8 @@ export async function POST(request: Request) {
   recordAudit(actor, {
     event: role ? "demo.view_as.started" : "demo.view_as.ended",
     resourceType: "user",
-    resourceId: actor.id,
-    payload: { viewAsRole: role },
+    resourceId: userId ?? actor.id,
+    payload: { viewAsRole: role, viewAsUserId: userId },
   });
   return NextResponse.json({ ok: true });
 }

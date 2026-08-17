@@ -15,20 +15,15 @@ import {
   intelligenceFeed,
   queueMetrics,
 } from "./selectors";
-import {
-  humanWorkflowReducer,
-  mergeHumanState,
-  type HumanStateMap,
-} from "./state";
+import { humanWorkflowReducer, mergeHumanState } from "./state";
 import type { Tone } from "./types";
 import { useOptionalSession } from "@/auth/session-context";
 
-const STORAGE_KEY = "cognivit-aros-human-decision-state-v1";
-const LEGACY_STORAGE_KEY = "cognivit-aros-morning-briefing";
 const navItems = [
   "AI Command Center",
   "AI Workforce",
   "Accounts",
+  "Cadences",
   "Decisions",
   "Signals",
   "Forecast",
@@ -86,10 +81,14 @@ function AppSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         </div>
         <nav>
           {navItems.map((item, index) =>
-            item === "Accounts" ? (
-              <Link key={item} className="nav-item" href="/accounts">
+            item === "Accounts" || item === "Cadences" ? (
+              <Link
+                key={item}
+                className="nav-item"
+                href={item === "Accounts" ? "/accounts" : "/cadences"}
+              >
                 <span className="glyph" aria-hidden="true">
-                  ▣
+                  {item === "Accounts" ? "▣" : "◫"}
                 </span>
                 {item}
               </Link>
@@ -101,7 +100,7 @@ function AppSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                 onClick={index === 0 ? onClose : undefined}
               >
                 <span className="glyph" aria-hidden="true">
-                  {["⌁", "✣", "▣", "◇", "⌁", "↗", "◎", "⚙"][index]}
+                  {["⌁", "✣", "▣", "◫", "◇", "⌁", "↗", "◎", "⚙"][index]}
                 </span>
                 {item}
               </button>
@@ -709,82 +708,108 @@ function Diagnostics() {
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+export interface AssignedAccountSummary {
+  id: string;
+  name: string;
+  segment: string | null;
+  status: string;
 }
-function validHumanState(value: unknown): value is HumanStateMap {
+export interface CadenceSummary {
+  id: string;
+  status: string;
+  scope: string;
+  scheduledAt: string | null;
+  templateCode: string;
+  templateName: string;
+  opportunityName: string | null;
+  accountName: string | null;
+  participantNames: string | null;
+  preparationSummary: string;
+  agendaCount: number;
+  carryForwardCount: number;
+}
+
+const cadenceTime = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(value))
+    : "Scheduling needed";
+
+function UpcomingCadences({ cadences }: { cadences: CadenceSummary[] }) {
+  const upcoming = cadences
+    .filter((cadence) => cadence.status !== "COMPLETED")
+    .slice(0, 4);
   return (
-    isRecord(value) &&
-    !Array.isArray(value.insights) &&
-    !Array.isArray(value.decisions)
+    <section className="ae-cadences panel" aria-labelledby="ae-cadences-title">
+      <div className="section-heading">
+        <div>
+          <h2 id="ae-cadences-title">My upcoming cadences</h2>
+          <p>
+            Manager 1:1s and cross-functional meetings prepared from signals and
+            prior action items.
+          </p>
+        </div>
+        <Link href="/cadences">Open unified cadence →</Link>
+      </div>
+      {upcoming.length ? (
+        <div className="ae-cadence-list">
+          {upcoming.map((cadence) => (
+            <Link href={`/cadences/${cadence.id}`} key={cadence.id}>
+              <div className="ae-cadence-time">
+                <span>{cadence.status}</span>
+                <strong>{cadenceTime(cadence.scheduledAt)}</strong>
+              </div>
+              <div>
+                <small>{cadence.templateCode.replaceAll("_", " ")}</small>
+                <h3>{cadence.templateName}</h3>
+                <p>
+                  {cadence.opportunityName ??
+                    cadence.accountName ??
+                    cadence.scope}
+                </p>
+                <span>{cadence.participantNames}</span>
+              </div>
+              <div className="ae-cadence-prep">
+                <strong>AI preparation</strong>
+                <p>{cadence.preparationSummary}</p>
+                <small>
+                  {cadence.agendaCount} agenda items ·{" "}
+                  {cadence.carryForwardCount} previous actions
+                </small>
+              </div>
+              <b aria-hidden="true">→</b>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="feed-state">
+          <strong>No upcoming cadences</strong>
+          <p>No prepared or scheduled sessions are assigned to you.</p>
+        </div>
+      )}
+    </section>
   );
 }
-function migrateLegacyState(
-  value: unknown,
-  initialDecisions: GovernedDecision[],
-): HumanStateMap {
-  if (!isRecord(value) || !Array.isArray(value.insights)) return {};
-  const migrated: HumanStateMap = {};
-  for (const item of value.insights) {
-    if (!isRecord(item) || typeof item.id !== "string") continue;
-    const decision = initialDecisions.find(
-      (entry) => entry.candidateId === item.id,
-    );
-    if (!decision) continue;
-    const legacyStatus =
-      typeof item.status === "string" ? item.status.toLowerCase() : "pending";
-    const status: DecisionStatus =
-      legacyStatus === "approved"
-        ? "ready-for-execution"
-        : legacyStatus === "dismissed"
-          ? "dismissed"
-          : legacyStatus === "snoozed"
-            ? "snoozed"
-            : "pending";
-    migrated[decision.id] = {
-      status,
-      editedRecommendation:
-        typeof item.recommendedAction === "string" &&
-        item.recommendedAction !== decision.recommendedAction
-          ? item.recommendedAction
-          : undefined,
-      auditEvents: [],
-    };
-  }
-  return migrated;
-}
-export function MorningBriefingDashboard({initialDecisions}:{initialDecisions:GovernedDecision[]}) {
+
+export function MorningBriefingDashboard({
+  initialDecisions,
+  assignedAccounts = [],
+  cadences = [],
+}: {
+  initialDecisions: GovernedDecision[];
+  assignedAccounts?: AssignedAccountSummary[];
+  cadences?: CadenceSummary[];
+}) {
   const [humanState, dispatch] = useReducer(humanWorkflowReducer, {});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [queueOpen, setQueueOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const hydrated = useRef(false);
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed: unknown = JSON.parse(saved);
-        if (validHumanState(parsed))
-          dispatch({ type: "hydrate", state: parsed });
-      } else {
-        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-        if (legacy)
-          dispatch({
-            type: "hydrate",
-            state: migrateLegacyState(JSON.parse(legacy) as unknown,initialDecisions),
-          });
-      }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-    } finally {
-      hydrated.current = true;
-    }
-  }, [initialDecisions]);
-  useEffect(() => {
-    if (hydrated.current)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(humanState));
-  }, [humanState]);
   useEffect(() => {
     if (!feedback) return;
     const timeout = window.setTimeout(() => setFeedback(""), 3500);
@@ -795,7 +820,7 @@ export function MorningBriefingDashboard({initialDecisions}:{initialDecisions:Go
       initialDecisions.map((decision) =>
         mergeHumanState(decision, humanState[decision.id]),
       ),
-    [humanState,initialDecisions],
+    [humanState, initialDecisions],
   );
   const feed = intelligenceFeed(decisions);
   const queue = decisionQueue(decisions);
@@ -804,10 +829,29 @@ export function MorningBriefingDashboard({initialDecisions}:{initialDecisions:Go
     defaultDecisionControlPolicy.highImpactThreshold,
   );
   const selected = decisions.find((decision) => decision.id === selectedId);
-  const persistDecision=(decision:GovernedDecision,action:"approve"|"dismiss"|"edit"|"execute"|"snooze",recommendation?:string)=>process.env.NODE_ENV==="test"?Promise.resolve():fetch(`/api/decisions/${encodeURIComponent(decision.id)}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,recommendation})}).then(()=>undefined);
+  const persistDecision = (
+    decision: GovernedDecision,
+    action: "approve" | "dismiss" | "edit" | "execute" | "snooze",
+    recommendation?: string,
+  ) =>
+    process.env.NODE_ENV === "test"
+      ? Promise.resolve()
+      : fetch(`/api/decisions/${encodeURIComponent(decision.id)}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action, recommendation }),
+        }).then(() => undefined);
   const update = (decision: GovernedDecision, status: DecisionStatus) => {
     dispatch({ type: "set-status", decision, status, now: now() });
-    if(status==="approved"||status==="dismissed"||status==="snoozed")void persistDecision(decision,status==="approved"?"approve":status==="dismissed"?"dismiss":"snooze");
+    if (status === "approved" || status === "dismissed" || status === "snoozed")
+      void persistDecision(
+        decision,
+        status === "approved"
+          ? "approve"
+          : status === "dismissed"
+            ? "dismiss"
+            : "snooze",
+      );
     setFeedback(`${decision.accountName} decision ${status}.`);
   };
   const diagnostics =
@@ -824,6 +868,37 @@ export function MorningBriefingDashboard({initialDecisions}:{initialDecisions:Go
             <MetricCard key={metric.id} metric={metric} />
           ))}
         </section>
+        <section
+          className="assigned-accounts panel"
+          aria-labelledby="assigned-accounts-title"
+        >
+          <div className="section-heading">
+            <div>
+              <h2 id="assigned-accounts-title">My accounts</h2>
+              <p>Accounts in your active revenue-team jurisdiction.</p>
+            </div>
+            <Link href="/accounts">View all account context</Link>
+          </div>
+          {assignedAccounts.length > 0 ? (
+            <div className="assigned-account-list">
+              {assignedAccounts.map((account) => (
+                <Link href={`/accounts/${account.id}`} key={account.id}>
+                  <strong>{account.name}</strong>
+                  <span>{account.segment ?? "Enterprise"}</span>
+                  <StatusPill
+                    tone={account.status === "ACTIVE" ? "green" : "slate"}
+                  >
+                    {label(account.status.toLowerCase())}
+                  </StatusPill>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="assigned-accounts-empty">
+              No accounts are currently assigned to your revenue team.
+            </p>
+          )}
+        </section>
         <div className="dashboard-grid">
           <IntelligenceFeed decisions={feed} onSelect={setSelectedId} />
           <aside className="right-rail">
@@ -831,6 +906,7 @@ export function MorningBriefingDashboard({initialDecisions}:{initialDecisions:Go
             <WorkforceCard />
           </aside>
         </div>
+        <UpcomingCadences cadences={cadences} />
         {activeDecisions(decisions).length === 0 && (
           <div className="feed-state">
             <strong>No accepted decisions</strong>
@@ -856,7 +932,7 @@ export function MorningBriefingDashboard({initialDecisions}:{initialDecisions:Go
           onClose={() => setSelectedId(null)}
           onStatus={(status) => update(selected, status)}
           onEdit={(recommendation) => {
-            void persistDecision(selected,"edit",recommendation);
+            void persistDecision(selected, "edit", recommendation);
             dispatch({
               type: "edit",
               decision: selected,
@@ -866,7 +942,7 @@ export function MorningBriefingDashboard({initialDecisions}:{initialDecisions:Go
             setFeedback("Recommendation updated.");
           }}
           onExecute={() => {
-            void persistDecision(selected,"execute");
+            void persistDecision(selected, "execute");
             dispatch({ type: "execute", decision: selected, now: now() });
             setFeedback("Execution simulated and audited.");
           }}

@@ -1,44 +1,633 @@
-import {Pool,type PoolClient} from "pg";
-import {MemoryIdentityRepository} from "@/auth/repository";
-import type {IdentityStore,SecurityAuditEvent,Session,User} from "@/auth/types";
+import { Pool, type PoolClient } from "pg";
+import { MemoryIdentityRepository } from "@/auth/repository";
+import type {
+  IdentityStore,
+  SecurityAuditEvent,
+  Session,
+  User,
+} from "@/auth/types";
 
-const empty=():IdentityStore=>({schemaVersion:3,organizations:[],users:[],memberships:[],systemRoleTemplates:[],organizationRoles:[],roleAssignments:[],organizationalUnits:[],unitMemberships:[],relationships:[],revenueTeamAssignments:[],invitations:[],integrations:[],governanceConfigurations:[],teams:[],regions:[],sessions:[],assignments:[],auditEvents:[]});
-const iso=(value:unknown)=>value instanceof Date?value.toISOString():value as string;
-const json=(value:unknown)=>JSON.stringify(value??null);
+const empty = (): IdentityStore => ({
+  schemaVersion: 3,
+  organizations: [],
+  users: [],
+  memberships: [],
+  systemRoleTemplates: [],
+  organizationRoles: [],
+  roleAssignments: [],
+  organizationalUnits: [],
+  unitMemberships: [],
+  relationships: [],
+  revenueTeamAssignments: [],
+  invitations: [],
+  integrations: [],
+  governanceConfigurations: [],
+  teams: [],
+  regions: [],
+  sessions: [],
+  assignments: [],
+  auditEvents: [],
+});
+const iso = (value: unknown) =>
+  value instanceof Date ? value.toISOString() : (value as string);
+const json = (value: unknown) => JSON.stringify(value ?? null);
 
-export class PostgresIdentityRepository extends MemoryIdentityRepository{
- private pending:Promise<void>=Promise.resolve();
- private constructor(store:IdentityStore,private pool:Pool){super(store)}
- static async connect(connectionString:string){const pool=new Pool({connectionString,max:Number(process.env.DATABASE_POOL_MAX??10),ssl:process.env.DATABASE_SSL==="require"?{rejectUnauthorized:true}:undefined});return new PostgresIdentityRepository(await load(pool),pool)}
- private enqueue(work:(client:PoolClient)=>Promise<void>){this.pending=this.pending.then(async()=>{const client=await this.pool.connect();try{await client.query("BEGIN");await work(client);await client.query("COMMIT")}catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}})}
- protected persist(){throw new Error("Broad identity projection writes are disabled for the PostgreSQL runtime repository. Use a targeted identity command.")}
- update(){throw new Error("Broad identity projection writes are disabled for the PostgreSQL runtime repository. Use a targeted identity command.")}
- saveUser(user:User){this.store.users=this.store.users.filter(item=>item.id!==user.id);this.store.users.push(user);this.enqueue(async client=>{await client.query(`UPDATE users SET email=$2,first_name=$3,last_name=$4,display_name=$5,status=$6,password_hash=$7,platform_role=$8,updated_at=$9,last_login_at=$10 WHERE id=$1`,[user.id,user.email,user.firstName,user.lastName,user.displayName,user.status,user.passwordHash,user.platformRole,user.updatedAt,user.lastLoginAt])})}
- saveSession(session:Session){this.store.sessions=this.store.sessions.filter(item=>item.id!==session.id&&item.tokenHash!==session.tokenHash);this.store.sessions.push(session);this.enqueue(client=>upsertSession(client,session))}
- deleteSession(id:string){this.store.sessions=this.store.sessions.filter(session=>session.id!==id);this.enqueue(async client=>{await client.query(`DELETE FROM auth_sessions WHERE id=$1`,[id])})}
- appendAudit(event:SecurityAuditEvent){this.store.auditEvents.push(event);this.enqueue(client=>insertAudit(client,event))}
- async flush(){await this.pending}
- async refresh(){await this.flush();this.store=await load(this.pool)}
- async importStore(store:IdentityStore){this.store=structuredClone(store);const snapshot=structuredClone(store);this.enqueue(async client=>{await persistSnapshot(client,snapshot);await persistSupplemental(client,snapshot)});await this.flush()}
- async close(){await this.flush();await this.pool.end()}
+export class PostgresIdentityRepository extends MemoryIdentityRepository {
+  private pending: Promise<void> = Promise.resolve();
+  private constructor(
+    store: IdentityStore,
+    private pool: Pool,
+  ) {
+    super(store);
+  }
+  static async connect(connectionString: string) {
+    const pool = new Pool({
+      connectionString,
+      max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+      ssl:
+        process.env.DATABASE_SSL === "require"
+          ? { rejectUnauthorized: true }
+          : undefined,
+    });
+    return new PostgresIdentityRepository(await load(pool), pool);
+  }
+  private enqueue(work: (client: PoolClient) => Promise<void>) {
+    this.pending = this.pending.then(async () => {
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        await work(client);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    });
+  }
+  protected persist() {
+    throw new Error(
+      "Broad identity projection writes are disabled for the PostgreSQL runtime repository. Use a targeted identity command.",
+    );
+  }
+  update() {
+    throw new Error(
+      "Broad identity projection writes are disabled for the PostgreSQL runtime repository. Use a targeted identity command.",
+    );
+  }
+  saveUser(user: User) {
+    this.store.users = this.store.users.filter((item) => item.id !== user.id);
+    this.store.users.push(user);
+    this.enqueue(async (client) => {
+      await client.query(
+        `UPDATE users SET email=$2,first_name=$3,last_name=$4,display_name=$5,status=$6,password_hash=$7,platform_role=$8,updated_at=$9,last_login_at=$10 WHERE id=$1`,
+        [
+          user.id,
+          user.email,
+          user.firstName,
+          user.lastName,
+          user.displayName,
+          user.status,
+          user.passwordHash,
+          user.platformRole,
+          user.updatedAt,
+          user.lastLoginAt,
+        ],
+      );
+    });
+  }
+  saveSession(session: Session) {
+    this.store.sessions = this.store.sessions.filter(
+      (item) => item.id !== session.id && item.tokenHash !== session.tokenHash,
+    );
+    this.store.sessions.push(session);
+    this.enqueue((client) => upsertSession(client, session));
+  }
+  deleteSession(id: string) {
+    this.store.sessions = this.store.sessions.filter(
+      (session) => session.id !== id,
+    );
+    this.enqueue(async (client) => {
+      await client.query(`DELETE FROM auth_sessions WHERE id=$1`, [id]);
+    });
+  }
+  appendAudit(event: SecurityAuditEvent) {
+    this.store.auditEvents.push(event);
+    this.enqueue((client) => insertAudit(client, event));
+  }
+  async flush() {
+    await this.pending;
+  }
+  async refresh() {
+    await this.flush();
+    this.store = await load(this.pool);
+  }
+  async importStore(store: IdentityStore) {
+    this.store = structuredClone(store);
+    const snapshot = structuredClone(store);
+    this.enqueue(async (client) => {
+      await persistSnapshot(client, snapshot);
+      await persistSupplemental(client, snapshot);
+    });
+    await this.flush();
+  }
+  async close() {
+    await this.flush();
+    await this.pool.end();
+  }
 }
 
-async function load(pool:Pool):Promise<IdentityStore>{const s=empty(),q=(sql:string)=>pool.query(sql).then(result=>result.rows);const [organizations,users,memberships,templates,roles,roleAssignments,units,unitMemberships,relationships,revenueTeams,invitations,integrations,governance,teams,regions,sessions,audits]=await Promise.all([
- q(`SELECT * FROM organizations`),q(`SELECT * FROM users`),q(`SELECT * FROM organization_memberships`),q(`SELECT * FROM system_role_templates`),q(`SELECT * FROM organization_role_definitions`),q(`SELECT * FROM membership_role_assignments`),q(`SELECT * FROM organizational_units`),q(`SELECT * FROM membership_organizational_units`),q(`SELECT * FROM organization_relationships`),q(`SELECT * FROM revenue_team_assignments`),q(`SELECT * FROM organization_invitations`),q(`SELECT * FROM tenant_integrations`),q(`SELECT * FROM governance_configurations`),q(`SELECT * FROM teams`),q(`SELECT * FROM regions`),q(`SELECT * FROM auth_sessions`),q(`SELECT * FROM security_audit_events ORDER BY timestamp`)]);
- s.organizations=organizations.map(r=>({id:r.id,name:r.name,slug:r.slug,primaryDomain:r.primary_domain,status:r.status,environment:r.environment,timezone:r.timezone,fiscalYearStartMonth:r.fiscal_year_start_month,defaultMethodology:r.default_methodology,createdAt:iso(r.created_at),updatedAt:iso(r.updated_at),version:r.version}));
- s.users=users.map(r=>({id:r.id,organizationId:r.organization_id,email:r.email,firstName:r.first_name,lastName:r.last_name,displayName:r.display_name,role:r.role,status:r.status,platformRole:r.platform_role,managerUserId:r.manager_user_id,teamId:r.team_id,regionId:r.region_id,timezone:r.timezone,avatarUrl:r.avatar_url,isDemoUser:r.is_demo_user,isAdmin:r.is_admin,passwordHash:r.password_hash,createdAt:iso(r.created_at),updatedAt:iso(r.updated_at),lastLoginAt:r.last_login_at?iso(r.last_login_at):null,version:r.version}));
- s.memberships=memberships.map(r=>({id:r.id,organizationId:r.organization_id,userId:r.user_id,adminRole:r.admin_role,status:r.status,joinedAt:r.joined_at?iso(r.joined_at):null,permissionOverrides:r.permission_overrides??{},createdAt:iso(r.created_at),updatedAt:iso(r.updated_at)}));
- s.systemRoleTemplates=templates.map(r=>({id:r.id,code:r.code,name:r.name,category:r.category,description:r.description,defaultExperienceKey:r.default_experience_key,defaultPermissions:r.default_permissions??[],capabilities:r.capabilities??[],isActive:r.is_active}));
- s.organizationRoles=roles.map(r=>({id:r.id,organizationId:r.organization_id,name:r.name,code:r.code,systemTemplateId:r.system_template_id,category:r.category,description:r.description,defaultExperienceKey:r.default_experience_key,permissions:r.permissions??[],isSystemSeeded:r.is_system_seeded,isActive:r.is_active,version:r.version,createdAt:iso(r.created_at),updatedAt:iso(r.updated_at)}));
- s.roleAssignments=roleAssignments.map(r=>({id:r.id,organizationId:r.organization_id,membershipId:r.membership_id,organizationRoleDefinitionId:r.organization_role_definition_id,isPrimary:r.is_primary,effectiveFrom:r.effective_from?iso(r.effective_from):null,effectiveTo:r.effective_to?iso(r.effective_to):null,createdAt:iso(r.created_at),updatedAt:iso(r.updated_at)}));
- s.organizationalUnits=units.map(r=>({id:r.id,organizationId:r.organization_id,name:r.name,type:r.type,parentUnitId:r.parent_unit_id,leaderMembershipId:r.leader_membership_id,status:r.status,createdAt:iso(r.created_at),updatedAt:iso(r.updated_at)}));
- s.unitMemberships=unitMemberships.map(r=>({id:r.id,organizationId:r.organization_id,membershipId:r.membership_id,organizationalUnitId:r.organizational_unit_id,membershipType:r.membership_type,isPrimary:r.is_primary,createdAt:iso(r.created_at)}));
- s.relationships=relationships.map(r=>({id:r.id,organizationId:r.organization_id,sourceMembershipId:r.source_membership_id,targetMembershipId:r.target_membership_id,relationshipType:r.relationship_type,isPrimary:r.is_primary,effectiveFrom:r.effective_from?iso(r.effective_from):null,effectiveTo:r.effective_to?iso(r.effective_to):null,metadata:r.metadata,createdAt:iso(r.created_at),updatedAt:iso(r.updated_at)}));
- s.revenueTeamAssignments=revenueTeams.map(r=>({id:r.id,organizationId:r.organization_id,accountId:r.account_id,opportunityId:r.opportunity_id,membershipId:r.membership_id,organizationRoleDefinitionId:r.organization_role_definition_id,participationType:r.participation_type,isPrimaryOwner:r.is_primary_owner,createdAt:iso(r.created_at)}));
- s.invitations=invitations.map(r=>({id:r.id,organizationId:r.organization_id,email:r.email,adminRole:r.admin_role,...r.configuration,tokenHash:r.token_hash,expiresAt:iso(r.expires_at),acceptedAt:r.accepted_at?iso(r.accepted_at):null,invitedByUserId:r.invited_by_user_id,status:r.status,createdAt:iso(r.created_at)}));
- s.integrations=integrations.map(r=>({id:r.id,organizationId:r.organization_id,category:r.category,provider:r.provider,status:r.status,updatedAt:iso(r.updated_at)}));s.governanceConfigurations=governance.map(r=>({organizationId:r.organization_id,...r.configuration,updatedAt:iso(r.updated_at)}));s.teams=teams.map(r=>({id:r.id,organizationId:r.organization_id,name:r.name,managerUserId:r.manager_user_id,parentTeamId:r.parent_team_id,type:r.type,createdAt:iso(r.created_at),updatedAt:iso(r.updated_at)}));s.regions=regions.map(r=>({id:r.id,organizationId:r.organization_id,name:r.name,parentRegionId:r.parent_region_id}));s.sessions=sessions.map(r=>({id:r.id,tokenHash:r.token_hash,userId:r.user_id,organizationId:r.organization_id,viewAsRole:r.view_as_role,createdAt:iso(r.created_at),lastSeenAt:iso(r.last_seen_at),expiresAt:iso(r.expires_at)}));s.auditEvents=audits.map(r=>({id:r.id,organizationId:r.organization_id,actorUserId:r.actor_user_id,actorRole:r.actor_role,actorAdminRole:r.actor_admin_role,actorPlatformRole:r.actor_platform_role,event:r.event,resourceType:r.resource_type,resourceId:r.resource_id,timestamp:iso(r.timestamp),payload:r.payload,before:r.before_state,after:r.after_state}));return s}
+async function load(pool: Pool): Promise<IdentityStore> {
+  const s = empty(),
+    q = (sql: string) => pool.query(sql).then((result) => result.rows);
+  const [
+    organizations,
+    users,
+    memberships,
+    templates,
+    roles,
+    roleAssignments,
+    units,
+    unitMemberships,
+    relationships,
+    revenueTeams,
+    invitations,
+    integrations,
+    governance,
+    teams,
+    regions,
+    sessions,
+    audits,
+  ] = await Promise.all([
+    q(`SELECT * FROM organizations`),
+    q(`SELECT * FROM users`),
+    q(`SELECT * FROM organization_memberships`),
+    q(`SELECT * FROM system_role_templates`),
+    q(`SELECT * FROM organization_role_definitions`),
+    q(`SELECT * FROM membership_role_assignments`),
+    q(`SELECT * FROM organizational_units`),
+    q(`SELECT * FROM membership_organizational_units`),
+    q(`SELECT * FROM organization_relationships`),
+    q(`SELECT * FROM revenue_team_assignments`),
+    q(`SELECT * FROM organization_invitations`),
+    q(`SELECT * FROM tenant_integrations`),
+    q(`SELECT * FROM governance_configurations`),
+    q(`SELECT * FROM teams`),
+    q(`SELECT * FROM regions`),
+    q(`SELECT * FROM auth_sessions`),
+    q(`SELECT * FROM security_audit_events ORDER BY timestamp`),
+  ]);
+  s.organizations = organizations.map((r) => ({
+    id: r.id,
+    name: r.name,
+    slug: r.slug,
+    primaryDomain: r.primary_domain,
+    status: r.status,
+    environment: r.environment,
+    timezone: r.timezone,
+    fiscalYearStartMonth: r.fiscal_year_start_month,
+    defaultMethodology: r.default_methodology,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+    version: r.version,
+  }));
+  s.users = users.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    email: r.email,
+    firstName: r.first_name,
+    lastName: r.last_name,
+    displayName: r.display_name,
+    role: r.role,
+    status: r.status,
+    platformRole: r.platform_role,
+    managerUserId: r.manager_user_id,
+    teamId: r.team_id,
+    regionId: r.region_id,
+    timezone: r.timezone,
+    avatarUrl: r.avatar_url,
+    isDemoUser: r.is_demo_user,
+    isAdmin: r.is_admin,
+    passwordHash: r.password_hash,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+    lastLoginAt: r.last_login_at ? iso(r.last_login_at) : null,
+    version: r.version,
+  }));
+  s.memberships = memberships.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    userId: r.user_id,
+    adminRole: r.admin_role,
+    status: r.status,
+    joinedAt: r.joined_at ? iso(r.joined_at) : null,
+    permissionOverrides: r.permission_overrides ?? {},
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  }));
+  s.systemRoleTemplates = templates.map((r) => ({
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    category: r.category,
+    description: r.description,
+    defaultExperienceKey: r.default_experience_key,
+    defaultPermissions: r.default_permissions ?? [],
+    capabilities: r.capabilities ?? [],
+    isActive: r.is_active,
+  }));
+  s.organizationRoles = roles.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    name: r.name,
+    code: r.code,
+    systemTemplateId: r.system_template_id,
+    category: r.category,
+    description: r.description,
+    defaultExperienceKey: r.default_experience_key,
+    permissions: r.permissions ?? [],
+    isSystemSeeded: r.is_system_seeded,
+    isActive: r.is_active,
+    version: r.version,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  }));
+  s.roleAssignments = roleAssignments.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    membershipId: r.membership_id,
+    organizationRoleDefinitionId: r.organization_role_definition_id,
+    isPrimary: r.is_primary,
+    effectiveFrom: r.effective_from ? iso(r.effective_from) : null,
+    effectiveTo: r.effective_to ? iso(r.effective_to) : null,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  }));
+  s.organizationalUnits = units.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    name: r.name,
+    type: r.type,
+    parentUnitId: r.parent_unit_id,
+    leaderMembershipId: r.leader_membership_id,
+    status: r.status,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  }));
+  s.unitMemberships = unitMemberships.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    membershipId: r.membership_id,
+    organizationalUnitId: r.organizational_unit_id,
+    membershipType: r.membership_type,
+    isPrimary: r.is_primary,
+    createdAt: iso(r.created_at),
+  }));
+  s.relationships = relationships.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    sourceMembershipId: r.source_membership_id,
+    targetMembershipId: r.target_membership_id,
+    relationshipType: r.relationship_type,
+    isPrimary: r.is_primary,
+    effectiveFrom: r.effective_from ? iso(r.effective_from) : null,
+    effectiveTo: r.effective_to ? iso(r.effective_to) : null,
+    metadata: r.metadata,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  }));
+  s.revenueTeamAssignments = revenueTeams.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    accountId: r.account_id,
+    opportunityId: r.opportunity_id,
+    membershipId: r.membership_id,
+    organizationRoleDefinitionId: r.organization_role_definition_id,
+    participationType: r.participation_type,
+    isPrimaryOwner: r.is_primary_owner,
+    createdAt: iso(r.created_at),
+  }));
+  s.invitations = invitations.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    email: r.email,
+    adminRole: r.admin_role,
+    ...r.configuration,
+    tokenHash: r.token_hash,
+    expiresAt: iso(r.expires_at),
+    acceptedAt: r.accepted_at ? iso(r.accepted_at) : null,
+    invitedByUserId: r.invited_by_user_id,
+    status: r.status,
+    createdAt: iso(r.created_at),
+  }));
+  s.integrations = integrations.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    category: r.category,
+    provider: r.provider,
+    status: r.status,
+    updatedAt: iso(r.updated_at),
+  }));
+  s.governanceConfigurations = governance.map((r) => ({
+    organizationId: r.organization_id,
+    ...r.configuration,
+    updatedAt: iso(r.updated_at),
+  }));
+  s.teams = teams.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    name: r.name,
+    managerUserId: r.manager_user_id,
+    parentTeamId: r.parent_team_id,
+    type: r.type,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  }));
+  s.regions = regions.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    name: r.name,
+    parentRegionId: r.parent_region_id,
+  }));
+  s.sessions = sessions.map((r) => ({
+    id: r.id,
+    tokenHash: r.token_hash,
+    userId: r.user_id,
+    organizationId: r.organization_id,
+    viewAsRole: r.view_as_role,
+    viewAsUserId: r.view_as_user_id,
+    createdAt: iso(r.created_at),
+    lastSeenAt: iso(r.last_seen_at),
+    expiresAt: iso(r.expires_at),
+  }));
+  s.auditEvents = audits.map((r) => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    actorUserId: r.actor_user_id,
+    actorRole: r.actor_role,
+    actorAdminRole: r.actor_admin_role,
+    actorPlatformRole: r.actor_platform_role,
+    event: r.event,
+    resourceType: r.resource_type,
+    resourceId: r.resource_id,
+    timestamp: iso(r.timestamp),
+    payload: r.payload,
+    before: r.before_state,
+    after: r.after_state,
+  }));
+  return s;
+}
 
-async function persistSnapshot(c:PoolClient,s:IdentityStore){for(const o of s.organizations)await c.query(`INSERT INTO organizations(id,name,slug,status,primary_domain,environment,timezone,fiscal_year_start_month,default_methodology,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET name=excluded.name,slug=excluded.slug,status=excluded.status,primary_domain=excluded.primary_domain,environment=excluded.environment,timezone=excluded.timezone,fiscal_year_start_month=excluded.fiscal_year_start_month,default_methodology=excluded.default_methodology,updated_at=excluded.updated_at`,[o.id,o.name,o.slug,o.status,o.primaryDomain,o.environment,o.timezone,o.fiscalYearStartMonth,o.defaultMethodology,o.createdAt,o.updatedAt]);for(const u of s.users)await c.query(`INSERT INTO users(id,organization_id,email,first_name,last_name,display_name,role,status,timezone,avatar_url,is_demo_user,is_admin,password_hash,platform_role,created_at,updated_at,last_login_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) ON CONFLICT(id) DO UPDATE SET email=excluded.email,first_name=excluded.first_name,last_name=excluded.last_name,display_name=excluded.display_name,status=excluded.status,password_hash=excluded.password_hash,platform_role=excluded.platform_role,updated_at=excluded.updated_at,last_login_at=excluded.last_login_at`,[u.id,u.organizationId,u.email,u.firstName,u.lastName,u.displayName,u.role,u.status,u.timezone,u.avatarUrl,u.isDemoUser,u.isAdmin,u.passwordHash,u.platformRole,u.createdAt,u.updatedAt,u.lastLoginAt]);for(const m of s.memberships)await c.query(`INSERT INTO organization_memberships(id,organization_id,user_id,admin_role,status,joined_at,permission_overrides,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET admin_role=excluded.admin_role,status=excluded.status,joined_at=excluded.joined_at,permission_overrides=excluded.permission_overrides,updated_at=excluded.updated_at`,[m.id,m.organizationId,m.userId,m.adminRole,m.status,m.joinedAt,json(m.permissionOverrides??{}),m.createdAt,m.updatedAt]);for(const r of s.organizationRoles)await c.query(`INSERT INTO organization_role_definitions(id,organization_id,name,code,system_template_id,category,description,default_experience_key,permissions,is_system_seeded,is_active,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO UPDATE SET name=excluded.name,system_template_id=excluded.system_template_id,category=excluded.category,description=excluded.description,default_experience_key=excluded.default_experience_key,permissions=excluded.permissions,is_active=excluded.is_active,updated_at=excluded.updated_at`,[r.id,r.organizationId,r.name,r.code,r.systemTemplateId,r.category,r.description,r.defaultExperienceKey,json(r.permissions),r.isSystemSeeded,r.isActive,r.createdAt,r.updatedAt]);for(const a of s.roleAssignments)await c.query(`INSERT INTO membership_role_assignments(id,organization_id,membership_id,organization_role_definition_id,is_primary,effective_from,effective_to,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET is_primary=excluded.is_primary,effective_to=excluded.effective_to,updated_at=excluded.updated_at`,[a.id,a.organizationId,a.membershipId,a.organizationRoleDefinitionId,a.isPrimary,a.effectiveFrom,a.effectiveTo,a.createdAt,a.updatedAt]);for(const u of s.organizationalUnits)await c.query(`INSERT INTO organizational_units(id,organization_id,name,type,parent_unit_id,leader_membership_id,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET name=excluded.name,parent_unit_id=excluded.parent_unit_id,leader_membership_id=excluded.leader_membership_id,status=excluded.status,updated_at=excluded.updated_at`,[u.id,u.organizationId,u.name,u.type,u.parentUnitId,u.leaderMembershipId,u.status,u.createdAt,u.updatedAt]);for(const r of s.relationships)await c.query(`INSERT INTO organization_relationships(id,organization_id,source_membership_id,target_membership_id,relationship_type,is_primary,effective_from,effective_to,metadata,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET is_primary=excluded.is_primary,effective_to=excluded.effective_to,metadata=excluded.metadata,updated_at=excluded.updated_at`,[r.id,r.organizationId,r.sourceMembershipId,r.targetMembershipId,r.relationshipType,r.isPrimary,r.effectiveFrom,r.effectiveTo,json(r.metadata),r.createdAt,r.updatedAt]);for(const a of s.revenueTeamAssignments)await c.query(`INSERT INTO revenue_team_assignments(id,organization_id,account_id,opportunity_id,membership_id,organization_role_definition_id,participation_type,is_primary_owner,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) ON CONFLICT(id) DO UPDATE SET participation_type=excluded.participation_type,is_primary_owner=excluded.is_primary_owner,updated_at=excluded.updated_at`,[a.id,a.organizationId,a.accountId,a.opportunityId,a.membershipId,a.organizationRoleDefinitionId,a.participationType,a.isPrimaryOwner,a.createdAt]);for(const i of s.invitations)await c.query(`INSERT INTO organization_invitations(id,organization_id,email,admin_role,configuration,token_hash,expires_at,accepted_at,invited_by_user_id,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET email=excluded.email,configuration=excluded.configuration,token_hash=excluded.token_hash,expires_at=excluded.expires_at,accepted_at=excluded.accepted_at,status=excluded.status`,[i.id,i.organizationId,i.email,i.adminRole,json({roleAssignmentIds:i.roleAssignmentIds,organizationalUnitIds:i.organizationalUnitIds,primaryManagerMembershipId:i.primaryManagerMembershipId,dottedLineManagerMembershipIds:i.dottedLineManagerMembershipIds}),i.tokenHash,i.expiresAt,i.acceptedAt,i.invitedByUserId,i.status,i.createdAt]);for(const session of s.sessions)await upsertSession(c,session);}
-async function upsertSession(c:PoolClient,s:Session){await c.query(`INSERT INTO auth_sessions(id,token_hash,user_id,organization_id,view_as_role,created_at,last_seen_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(id) DO UPDATE SET token_hash=excluded.token_hash,organization_id=excluded.organization_id,view_as_role=excluded.view_as_role,last_seen_at=excluded.last_seen_at,expires_at=excluded.expires_at`,[s.id,s.tokenHash,s.userId,s.organizationId,s.viewAsRole,s.createdAt,s.lastSeenAt,s.expiresAt])}
-async function persistSupplemental(c:PoolClient,s:IdentityStore){for(const t of s.systemRoleTemplates)await c.query(`INSERT INTO system_role_templates(id,code,name,category,description,default_experience_key,default_permissions,capabilities,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET name=excluded.name,default_permissions=excluded.default_permissions,capabilities=excluded.capabilities,is_active=excluded.is_active`,[t.id,t.code,t.name,t.category,t.description,t.defaultExperienceKey,json(t.defaultPermissions),json(t.capabilities),t.isActive]);for(const m of s.unitMemberships)await c.query(`INSERT INTO membership_organizational_units(id,organization_id,membership_id,organizational_unit_id,membership_type,is_primary,created_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO UPDATE SET membership_type=excluded.membership_type,is_primary=excluded.is_primary`,[m.id,m.organizationId,m.membershipId,m.organizationalUnitId,m.membershipType,m.isPrimary,m.createdAt]);for(const i of s.integrations)await c.query(`INSERT INTO tenant_integrations(id,organization_id,category,provider,status,updated_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(organization_id,category) DO UPDATE SET provider=excluded.provider,status=excluded.status,updated_at=excluded.updated_at`,[i.id,i.organizationId,i.category,i.provider,i.status,i.updatedAt]);for(const g of s.governanceConfigurations)await c.query(`INSERT INTO governance_configurations(organization_id,configuration,updated_at) VALUES($1,$2,$3) ON CONFLICT(organization_id) DO UPDATE SET configuration=excluded.configuration,updated_at=excluded.updated_at`,[g.organizationId,json({autonomyDefault:g.autonomyDefault,requireHumanApproval:g.requireHumanApproval,managerApprovalCategories:g.managerApprovalCategories,demoModeAllowed:g.demoModeAllowed,auditRetentionDays:g.auditRetentionDays}),g.updatedAt]);for(const u of s.users)await c.query(`UPDATE users SET manager_user_id=$2,team_id=$3,region_id=$4,role=$5,is_admin=$6 WHERE id=$1`,[u.id,u.managerUserId,u.teamId,u.regionId,u.role,u.isAdmin])}
-async function insertAudit(c:PoolClient,e:SecurityAuditEvent){await c.query(`INSERT INTO security_audit_events(id,organization_id,actor_user_id,actor_role,actor_admin_role,actor_platform_role,event,resource_type,resource_id,timestamp,payload,before_state,after_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO NOTHING`,[e.id,e.organizationId,e.actorUserId,e.actorRole,e.actorAdminRole,e.actorPlatformRole,e.event,e.resourceType,e.resourceId,e.timestamp,json(e.payload),json(e.before),json(e.after)])}
+async function persistSnapshot(c: PoolClient, s: IdentityStore) {
+  for (const o of s.organizations)
+    await c.query(
+      `INSERT INTO organizations(id,name,slug,status,primary_domain,environment,timezone,fiscal_year_start_month,default_methodology,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET name=excluded.name,slug=excluded.slug,status=excluded.status,primary_domain=excluded.primary_domain,environment=excluded.environment,timezone=excluded.timezone,fiscal_year_start_month=excluded.fiscal_year_start_month,default_methodology=excluded.default_methodology,updated_at=excluded.updated_at`,
+      [
+        o.id,
+        o.name,
+        o.slug,
+        o.status,
+        o.primaryDomain,
+        o.environment,
+        o.timezone,
+        o.fiscalYearStartMonth,
+        o.defaultMethodology,
+        o.createdAt,
+        o.updatedAt,
+      ],
+    );
+  for (const u of s.users)
+    await c.query(
+      `INSERT INTO users(id,organization_id,email,first_name,last_name,display_name,role,status,timezone,avatar_url,is_demo_user,is_admin,password_hash,platform_role,created_at,updated_at,last_login_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) ON CONFLICT(id) DO UPDATE SET email=excluded.email,first_name=excluded.first_name,last_name=excluded.last_name,display_name=excluded.display_name,status=excluded.status,password_hash=excluded.password_hash,platform_role=excluded.platform_role,updated_at=excluded.updated_at,last_login_at=excluded.last_login_at`,
+      [
+        u.id,
+        u.organizationId,
+        u.email,
+        u.firstName,
+        u.lastName,
+        u.displayName,
+        u.role,
+        u.status,
+        u.timezone,
+        u.avatarUrl,
+        u.isDemoUser,
+        u.isAdmin,
+        u.passwordHash,
+        u.platformRole,
+        u.createdAt,
+        u.updatedAt,
+        u.lastLoginAt,
+      ],
+    );
+  for (const m of s.memberships)
+    await c.query(
+      `INSERT INTO organization_memberships(id,organization_id,user_id,admin_role,status,joined_at,permission_overrides,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET admin_role=excluded.admin_role,status=excluded.status,joined_at=excluded.joined_at,permission_overrides=excluded.permission_overrides,updated_at=excluded.updated_at`,
+      [
+        m.id,
+        m.organizationId,
+        m.userId,
+        m.adminRole,
+        m.status,
+        m.joinedAt,
+        json(m.permissionOverrides ?? {}),
+        m.createdAt,
+        m.updatedAt,
+      ],
+    );
+  for (const r of s.organizationRoles)
+    await c.query(
+      `INSERT INTO organization_role_definitions(id,organization_id,name,code,system_template_id,category,description,default_experience_key,permissions,is_system_seeded,is_active,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO UPDATE SET name=excluded.name,system_template_id=excluded.system_template_id,category=excluded.category,description=excluded.description,default_experience_key=excluded.default_experience_key,permissions=excluded.permissions,is_active=excluded.is_active,updated_at=excluded.updated_at`,
+      [
+        r.id,
+        r.organizationId,
+        r.name,
+        r.code,
+        r.systemTemplateId,
+        r.category,
+        r.description,
+        r.defaultExperienceKey,
+        json(r.permissions),
+        r.isSystemSeeded,
+        r.isActive,
+        r.createdAt,
+        r.updatedAt,
+      ],
+    );
+  for (const a of s.roleAssignments)
+    await c.query(
+      `INSERT INTO membership_role_assignments(id,organization_id,membership_id,organization_role_definition_id,is_primary,effective_from,effective_to,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET is_primary=excluded.is_primary,effective_to=excluded.effective_to,updated_at=excluded.updated_at`,
+      [
+        a.id,
+        a.organizationId,
+        a.membershipId,
+        a.organizationRoleDefinitionId,
+        a.isPrimary,
+        a.effectiveFrom,
+        a.effectiveTo,
+        a.createdAt,
+        a.updatedAt,
+      ],
+    );
+  for (const u of s.organizationalUnits)
+    await c.query(
+      `INSERT INTO organizational_units(id,organization_id,name,type,parent_unit_id,leader_membership_id,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET name=excluded.name,parent_unit_id=excluded.parent_unit_id,leader_membership_id=excluded.leader_membership_id,status=excluded.status,updated_at=excluded.updated_at`,
+      [
+        u.id,
+        u.organizationId,
+        u.name,
+        u.type,
+        u.parentUnitId,
+        u.leaderMembershipId,
+        u.status,
+        u.createdAt,
+        u.updatedAt,
+      ],
+    );
+  for (const r of s.relationships)
+    await c.query(
+      `INSERT INTO organization_relationships(id,organization_id,source_membership_id,target_membership_id,relationship_type,is_primary,effective_from,effective_to,metadata,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET is_primary=excluded.is_primary,effective_to=excluded.effective_to,metadata=excluded.metadata,updated_at=excluded.updated_at`,
+      [
+        r.id,
+        r.organizationId,
+        r.sourceMembershipId,
+        r.targetMembershipId,
+        r.relationshipType,
+        r.isPrimary,
+        r.effectiveFrom,
+        r.effectiveTo,
+        json(r.metadata),
+        r.createdAt,
+        r.updatedAt,
+      ],
+    );
+  for (const a of s.revenueTeamAssignments)
+    await c.query(
+      `INSERT INTO revenue_team_assignments(id,organization_id,account_id,opportunity_id,membership_id,organization_role_definition_id,participation_type,is_primary_owner,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) ON CONFLICT(id) DO UPDATE SET participation_type=excluded.participation_type,is_primary_owner=excluded.is_primary_owner,updated_at=excluded.updated_at`,
+      [
+        a.id,
+        a.organizationId,
+        a.accountId,
+        a.opportunityId,
+        a.membershipId,
+        a.organizationRoleDefinitionId,
+        a.participationType,
+        a.isPrimaryOwner,
+        a.createdAt,
+      ],
+    );
+  for (const i of s.invitations)
+    await c.query(
+      `INSERT INTO organization_invitations(id,organization_id,email,admin_role,configuration,token_hash,expires_at,accepted_at,invited_by_user_id,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET email=excluded.email,configuration=excluded.configuration,token_hash=excluded.token_hash,expires_at=excluded.expires_at,accepted_at=excluded.accepted_at,status=excluded.status`,
+      [
+        i.id,
+        i.organizationId,
+        i.email,
+        i.adminRole,
+        json({
+          roleAssignmentIds: i.roleAssignmentIds,
+          organizationalUnitIds: i.organizationalUnitIds,
+          primaryManagerMembershipId: i.primaryManagerMembershipId,
+          dottedLineManagerMembershipIds: i.dottedLineManagerMembershipIds,
+        }),
+        i.tokenHash,
+        i.expiresAt,
+        i.acceptedAt,
+        i.invitedByUserId,
+        i.status,
+        i.createdAt,
+      ],
+    );
+  for (const session of s.sessions) await upsertSession(c, session);
+}
+async function upsertSession(c: PoolClient, s: Session) {
+  await c.query(
+    `INSERT INTO auth_sessions(id,token_hash,user_id,organization_id,view_as_role,view_as_user_id,created_at,last_seen_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET token_hash=excluded.token_hash,organization_id=excluded.organization_id,view_as_role=excluded.view_as_role,view_as_user_id=excluded.view_as_user_id,last_seen_at=excluded.last_seen_at,expires_at=excluded.expires_at`,
+    [
+      s.id,
+      s.tokenHash,
+      s.userId,
+      s.organizationId,
+      s.viewAsRole,
+      s.viewAsUserId,
+      s.createdAt,
+      s.lastSeenAt,
+      s.expiresAt,
+    ],
+  );
+}
+async function persistSupplemental(c: PoolClient, s: IdentityStore) {
+  for (const t of s.systemRoleTemplates)
+    await c.query(
+      `INSERT INTO system_role_templates(id,code,name,category,description,default_experience_key,default_permissions,capabilities,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET name=excluded.name,default_permissions=excluded.default_permissions,capabilities=excluded.capabilities,is_active=excluded.is_active`,
+      [
+        t.id,
+        t.code,
+        t.name,
+        t.category,
+        t.description,
+        t.defaultExperienceKey,
+        json(t.defaultPermissions),
+        json(t.capabilities),
+        t.isActive,
+      ],
+    );
+  for (const m of s.unitMemberships)
+    await c.query(
+      `INSERT INTO membership_organizational_units(id,organization_id,membership_id,organizational_unit_id,membership_type,is_primary,created_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO UPDATE SET membership_type=excluded.membership_type,is_primary=excluded.is_primary`,
+      [
+        m.id,
+        m.organizationId,
+        m.membershipId,
+        m.organizationalUnitId,
+        m.membershipType,
+        m.isPrimary,
+        m.createdAt,
+      ],
+    );
+  for (const i of s.integrations)
+    await c.query(
+      `INSERT INTO tenant_integrations(id,organization_id,category,provider,status,updated_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(organization_id,category) DO UPDATE SET provider=excluded.provider,status=excluded.status,updated_at=excluded.updated_at`,
+      [i.id, i.organizationId, i.category, i.provider, i.status, i.updatedAt],
+    );
+  for (const g of s.governanceConfigurations)
+    await c.query(
+      `INSERT INTO governance_configurations(organization_id,configuration,updated_at) VALUES($1,$2,$3) ON CONFLICT(organization_id) DO UPDATE SET configuration=excluded.configuration,updated_at=excluded.updated_at`,
+      [
+        g.organizationId,
+        json({
+          autonomyDefault: g.autonomyDefault,
+          requireHumanApproval: g.requireHumanApproval,
+          managerApprovalCategories: g.managerApprovalCategories,
+          demoModeAllowed: g.demoModeAllowed,
+          auditRetentionDays: g.auditRetentionDays,
+        }),
+        g.updatedAt,
+      ],
+    );
+  for (const u of s.users)
+    await c.query(
+      `UPDATE users SET manager_user_id=$2,team_id=$3,region_id=$4,role=$5,is_admin=$6 WHERE id=$1`,
+      [u.id, u.managerUserId, u.teamId, u.regionId, u.role, u.isAdmin],
+    );
+}
+async function insertAudit(c: PoolClient, e: SecurityAuditEvent) {
+  await c.query(
+    `INSERT INTO security_audit_events(id,organization_id,actor_user_id,actor_role,actor_admin_role,actor_platform_role,event,resource_type,resource_id,timestamp,payload,before_state,after_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO NOTHING`,
+    [
+      e.id,
+      e.organizationId,
+      e.actorUserId,
+      e.actorRole,
+      e.actorAdminRole,
+      e.actorPlatformRole,
+      e.event,
+      e.resourceType,
+      e.resourceId,
+      e.timestamp,
+      json(e.payload),
+      json(e.before),
+      json(e.after),
+    ],
+  );
+}

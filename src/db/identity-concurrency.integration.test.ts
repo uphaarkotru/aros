@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import type { User } from "@/auth/types";
 import {
@@ -48,6 +48,34 @@ describe.skipIf(!connectionString)(
     });
     afterAll(async () => {
       await Promise.all([a.close(), b.close(), pool.end()]);
+    });
+    afterEach(async () => {
+      const memberships = await pool.query(
+        `SELECT m.id,m.user_id FROM organization_memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id='org-cognivit-demo' AND u.email LIKE '%@example.test'`,
+      );
+      const membershipIds = memberships.rows.map((row) => row.id);
+      const userIds = memberships.rows.map((row) => row.user_id);
+      if (membershipIds.length) {
+        await pool.query(
+          `DELETE FROM membership_role_assignments WHERE membership_id=ANY($1::text[])`,
+          [membershipIds],
+        );
+        await pool.query(
+          `DELETE FROM membership_organizational_units WHERE membership_id=ANY($1::text[])`,
+          [membershipIds],
+        );
+        await pool.query(
+          `DELETE FROM organization_relationships WHERE source_membership_id=ANY($1::text[]) OR target_membership_id=ANY($1::text[])`,
+          [membershipIds],
+        );
+        await pool.query(
+          `DELETE FROM organization_memberships WHERE id=ANY($1::text[])`,
+          [membershipIds],
+        );
+        await pool.query(`DELETE FROM users WHERE id=ANY($1::text[])`, [
+          userIds,
+        ]);
+      }
     });
     const audit = (
       organizationId: string,
@@ -188,6 +216,16 @@ describe.skipIf(!connectionString)(
           idempotencyKey: slug,
         });
       expect(boot.token).toBeTruthy();
+      expect(
+        Number(
+          (
+            await pool.query(
+              `SELECT count(*) FROM cadence_templates WHERE organization_id=$1`,
+              [boot.organizationId],
+            )
+          ).rows[0].count,
+        ),
+      ).toBeGreaterThanOrEqual(15);
       const results = await Promise.allSettled([
         a.acceptInvitation({
           token: boot.token!,
@@ -450,6 +488,19 @@ describe.skipIf(!connectionString)(
           managerUserId: foreignManager,
         }),
       ).rejects.toThrow("Select an active manager");
+      await expect(
+        a.createOrganizationUser({
+          organizationId: "org-cognivit-demo",
+          actor,
+          email,
+          firstName: "Invalid",
+          lastName: "Reporting Line",
+          password: "SecurePass!1",
+          roleCode: "AE",
+          status: "ACTIVE",
+          managerUserId: "user-ae-sarah",
+        }),
+      ).rejects.toThrow("active management role");
       expect(
         Number(
           (

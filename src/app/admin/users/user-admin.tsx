@@ -1,14 +1,352 @@
 "use client";
 import Link from "next/link";
-import {useMemo,useState,type FormEvent} from "react";
-import {roleDisplay} from "@/auth/permissions";
-import {revenueRoles,type PublicUser,type RevenueRole,type UserStatus} from "@/auth/types";
-type Draft={id?:string;email:string;firstName:string;lastName:string;role:RevenueRole;managerUserId:string;status:UserStatus;password:string};
-const empty:Draft={email:"",firstName:"",lastName:"",role:"AE",managerUserId:"",status:"ACTIVE",password:""};
-export function UserAdmin({initialUsers,organizationName,actorId}:{initialUsers:PublicUser[];organizationName:string;actorId:string}){
- const[users,setUsers]=useState(initialUsers),[draft,setDraft]=useState<Draft>(empty),[showPassword,setShowPassword]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[pending,setPending]=useState(false),editedUser=users.find(user=>user.id===draft.id),editingAdmin=Boolean(editedUser?.isAdmin);
- const managers=useMemo(()=>users.filter(user=>user.status==="ACTIVE"&&!user.isAdmin&&user.id!==draft.id).sort((a,b)=>a.displayName.localeCompare(b.displayName)),[users,draft.id]);
- function reset(){setDraft(empty);setShowPassword(false)}
- function edit(user:PublicUser){setDraft({id:user.id,email:user.email,firstName:user.firstName,lastName:user.lastName,role:user.role,managerUserId:user.managerUserId??"",status:user.status,password:""});setShowPassword(false);setError("");setNotice("");window.scrollTo({top:0,behavior:"smooth"})}
- async function submit(event:FormEvent){event.preventDefault();setPending(true);setError("");setNotice("");try{const response=await fetch("/api/admin/users",{method:draft.id?"PATCH":"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...draft,managerUserId:draft.managerUserId||null})}),result=await response.json();if(!response.ok){setError(result.error??"Unable to save user.");return}const saved=result.user as PublicUser;setUsers(current=>[...current.filter(user=>user.id!==saved.id),saved]);reset();setNotice(draft.id?"User updated.":"User created.")}catch{setError("Unable to reach the administration service.")}finally{setPending(false)}}
- return <main className="admin-page"><header className="admin-title"><div><span className="eyebrow">ORGANIZATION ADMINISTRATION</span><h1>Users & reporting lines</h1><p>{organizationName} · Create login IDs, assign revenue roles, and configure managers.</p></div><Link href="/today">← Back to Today</Link></header><section className="admin-grid"><form className="admin-form" onSubmit={submit}><header><div><h2>{draft.id?"Edit user":"Add user"}</h2><p>{draft.id?"Update access and reporting details.":"Create a new organization login."}</p></div>{draft.id&&<button type="button" className="secondary-button" onClick={reset}>Cancel</button>}</header><div className="form-grid"><label>First name<input value={draft.firstName} onChange={event=>setDraft({...draft,firstName:event.target.value})} required/></label><label>Last name<input value={draft.lastName} onChange={event=>setDraft({...draft,lastName:event.target.value})} required/></label><label className="wide">User ID / email<input type="email" value={draft.email} onChange={event=>setDraft({...draft,email:event.target.value})} required/></label>{editingAdmin?<label className="wide">Access role<input value="Organization Admin" disabled/></label>:<><label>Revenue role<select value={draft.role} onChange={event=>setDraft({...draft,role:event.target.value as RevenueRole})}>{revenueRoles.map(role=><option key={role} value={role}>{roleDisplay[role]}</option>)}</select></label><label>Reporting manager<select value={draft.managerUserId} onChange={event=>setDraft({...draft,managerUserId:event.target.value})}><option value="">No manager</option>{managers.map(user=><option key={user.id} value={user.id}>{user.displayName} · {roleDisplay[user.role]}</option>)}</select></label></>}<label>Status<select value={draft.status} onChange={event=>setDraft({...draft,status:event.target.value as UserStatus})}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label><label>Password {draft.id&&<small>(leave blank to keep)</small>}<span className="password-control"><input type={showPassword?"text":"password"} autoComplete="new-password" minLength={8} required={!draft.id} value={draft.password} onChange={event=>setDraft({...draft,password:event.target.value})}/><button type="button" aria-label={showPassword?"Hide password":"Show password"} aria-pressed={showPassword} onClick={()=>setShowPassword(value=>!value)}>{showPassword?"Hide":"Show"}</button></span></label></div>{error&&<p className="admin-message error" role="alert">{error}</p>}{notice&&<p className="admin-message success" role="status">{notice}</p>}<button className="primary-button" disabled={pending}>{pending?"Saving…":draft.id?"Save changes":"Create user"}</button></form><section className="admin-list"><header><div><h2>Organization users</h2><p>{users.length} configured identities</p></div></header><div className="user-table"><div className="user-row headings"><span>User</span><span>Role</span><span>Reports to</span><span>Status</span><span/></div>{[...users].sort((a,b)=>a.displayName.localeCompare(b.displayName)).map(user=>{const manager=users.find(item=>item.id===user.managerUserId);return <div className="user-row" key={user.id}><span><strong>{user.displayName}</strong><small>{user.email}{user.id===actorId?" · You":""}</small></span><span>{user.isAdmin?"Organization Admin":roleDisplay[user.role]}</span><span>{user.isAdmin?"—":manager?.displayName??"—"}</span><span><i className={`status-dot ${user.status.toLowerCase()}`}/>{user.status.toLowerCase()}</span><button onClick={()=>edit(user)}>Edit</button></div>})}</div></section></section></main>}
+import { useMemo, useState, type FormEvent } from "react";
+import { roleDisplay } from "@/auth/permissions";
+import { canServeAsReportingManager } from "@/auth/user-administration";
+import {
+  revenueRoles,
+  type PublicUser,
+  type RevenueRole,
+  type UserStatus,
+} from "@/auth/types";
+type Draft = {
+  id?: string;
+  version?: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: RevenueRole;
+  managerUserId: string;
+  status: UserStatus;
+  password: string;
+};
+const empty: Draft = {
+  email: "",
+  firstName: "",
+  lastName: "",
+  role: "AE",
+  managerUserId: "",
+  status: "ACTIVE",
+  password: "",
+};
+export function UserAdmin({
+  initialUsers,
+  organizationName,
+  actorId,
+}: {
+  initialUsers: PublicUser[];
+  organizationName: string;
+  actorId: string;
+}) {
+  const [users, setUsers] = useState(initialUsers),
+    [draft, setDraft] = useState<Draft>(empty),
+    [showPassword, setShowPassword] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [pending, setPending] = useState(false),
+    editedUser = users.find((user) => user.id === draft.id),
+    editingAdmin = Boolean(editedUser?.isAdmin),
+    currentManager = users.find(
+      (user) => user.id === editedUser?.managerUserId,
+    ),
+    selectedManager = users.find((user) => user.id === draft.managerUserId);
+  const managers = useMemo(
+    () =>
+      users
+        .filter(
+          (user) =>
+            user.status === "ACTIVE" &&
+            !user.isAdmin &&
+            user.id !== draft.id &&
+            canServeAsReportingManager(user.role),
+        )
+        .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [users, draft.id],
+  );
+  function reset() {
+    setDraft(empty);
+    setShowPassword(false);
+  }
+  function edit(user: PublicUser) {
+    setDraft({
+      id: user.id,
+      version: user.version,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      managerUserId: user.managerUserId ?? "",
+      status: user.status,
+      password: "",
+    });
+    setShowPassword(false);
+    setError("");
+    setNotice("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/users", {
+          method: draft.id ? "PATCH" : "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...draft,
+            managerUserId: draft.managerUserId || null,
+          }),
+        }),
+        result = await response.json();
+      if (!response.ok) {
+        setError(result.error ?? "Unable to save user.");
+        return;
+      }
+      const saved = result.user as PublicUser;
+      setUsers((current) => [
+        ...current.filter((user) => user.id !== saved.id),
+        saved,
+      ]);
+      reset();
+      setNotice(draft.id ? "User updated." : "User created.");
+    } catch {
+      setError("Unable to reach the administration service.");
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <main className="admin-page">
+      <header className="admin-title">
+        <div>
+          <span className="eyebrow">ORGANIZATION ADMINISTRATION</span>
+          <h1>Users & reporting lines</h1>
+          <p>
+            {organizationName} · Create login IDs, assign revenue roles, and
+            configure managers.
+          </p>
+        </div>
+        <Link href="/today">← Back to Today</Link>
+      </header>
+      <section className="admin-grid">
+        <form className="admin-form" onSubmit={submit}>
+          <header>
+            <div>
+              <h2>{draft.id ? "Edit user" : "Add user"}</h2>
+              <p>
+                {draft.id
+                  ? "Update access and reporting details."
+                  : "Create a new organization login."}
+              </p>
+            </div>
+            {draft.id && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={reset}
+              >
+                Cancel
+              </button>
+            )}
+          </header>
+          {draft.id && (
+            <aside className="reporting-manager-summary">
+              <span>Current reporting manager</span>
+              <strong>
+                {currentManager?.displayName ?? "No manager assigned"}
+              </strong>
+              <small>
+                {currentManager
+                  ? roleDisplay[currentManager.role]
+                  : "This user is currently at the top of their reporting branch."}
+              </small>
+            </aside>
+          )}
+          <div className="form-grid">
+            <label>
+              First name
+              <input
+                value={draft.firstName}
+                onChange={(event) =>
+                  setDraft({ ...draft, firstName: event.target.value })
+                }
+                required
+              />
+            </label>
+            <label>
+              Last name
+              <input
+                value={draft.lastName}
+                onChange={(event) =>
+                  setDraft({ ...draft, lastName: event.target.value })
+                }
+                required
+              />
+            </label>
+            <label className="wide">
+              User ID / email
+              <input
+                type="email"
+                value={draft.email}
+                onChange={(event) =>
+                  setDraft({ ...draft, email: event.target.value })
+                }
+                required
+              />
+            </label>
+            {editingAdmin ? (
+              <label className="wide">
+                Access role
+                <input value="Organization Admin" disabled />
+              </label>
+            ) : (
+              <>
+                <label>
+                  Revenue role
+                  <select
+                    value={draft.role}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        role: event.target.value as RevenueRole,
+                      })
+                    }
+                  >
+                    {revenueRoles.map((role) => (
+                      <option key={role} value={role}>
+                        {roleDisplay[role]}
+                      </option>
+                    ))}
+                  </select>
+                  <small>
+                    {selectedManager
+                      ? `Reports to ${selectedManager.displayName} · ${roleDisplay[selectedManager.role]}`
+                      : "No direct reporting manager selected"}
+                  </small>
+                </label>
+                <label>
+                  Reporting manager
+                  <select
+                    value={draft.managerUserId}
+                    onChange={(event) =>
+                      setDraft({ ...draft, managerUserId: event.target.value })
+                    }
+                  >
+                    <option value="">No manager</option>
+                    {managers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.displayName} · {roleDisplay[user.role]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
+            <label>
+              Status
+              <select
+                value={draft.status}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    status: event.target.value as UserStatus,
+                  })
+                }
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </label>
+            <label>
+              Password {draft.id && <small>(leave blank to keep)</small>}
+              <span className="password-control">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required={!draft.id}
+                  value={draft.password}
+                  onChange={(event) =>
+                    setDraft({ ...draft, password: event.target.value })
+                  }
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  onClick={() => setShowPassword((value) => !value)}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </span>
+            </label>
+          </div>
+          {error && (
+            <p className="admin-message error" role="alert">
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p className="admin-message success" role="status">
+              {notice}
+            </p>
+          )}
+          <button className="primary-button" disabled={pending}>
+            {pending ? "Saving…" : draft.id ? "Save changes" : "Create user"}
+          </button>
+        </form>
+        <section className="admin-list">
+          <header>
+            <div>
+              <h2>Organization users</h2>
+              <p>{users.length} configured identities</p>
+            </div>
+          </header>
+          <div className="user-table">
+            <div className="user-row headings">
+              <span>User</span>
+              <span>Role</span>
+              <span>Reports to</span>
+              <span>Status</span>
+              <span />
+            </div>
+            {[...users]
+              .sort((a, b) => a.displayName.localeCompare(b.displayName))
+              .map((user) => {
+                const manager = users.find(
+                  (item) => item.id === user.managerUserId,
+                );
+                return (
+                  <div className="user-row" key={user.id}>
+                    <span>
+                      <strong>{user.displayName}</strong>
+                      <small>
+                        {user.email}
+                        {user.id === actorId ? " · You" : ""}
+                      </small>
+                    </span>
+                    <span>
+                      {user.isAdmin
+                        ? "Organization Admin"
+                        : roleDisplay[user.role]}
+                    </span>
+                    <span>
+                      {user.isAdmin ? "—" : (manager?.displayName ?? "—")}
+                    </span>
+                    <span>
+                      <i
+                        className={`status-dot ${user.status.toLowerCase()}`}
+                      />
+                      {user.status.toLowerCase()}
+                    </span>
+                    <button onClick={() => edit(user)}>Edit</button>
+                  </div>
+                );
+              })}
+          </div>
+        </section>
+      </section>
+    </main>
+  );
+}
