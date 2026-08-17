@@ -961,6 +961,285 @@ async function main() {
     );
   }
 
+  async function seedLeadership(client: PoolClient) {
+    const organizationId = "org-cognivit-demo";
+    await client.query(
+      `UPDATE opportunities SET owner_membership_id=CASE id
+        WHEN 'opp-pp' THEN 'membership-org-cognivit-demo-user-ae-daniel'
+        WHEN 'opp-nv' THEN 'membership-org-cognivit-demo-user-ae-priya'
+        WHEN 'opp-ft' THEN 'membership-org-cognivit-demo-user-ae-sarah'
+        WHEN 'opp-sf' THEN 'membership-org-cognivit-demo-user-ae-priya'
+        ELSE owner_membership_id END,
+        seller_forecast_category=CASE id WHEN 'opp-coinbase-renewal' THEN 'COMMIT' WHEN 'opp-pp' THEN 'BEST_CASE' WHEN 'opp-nv' THEN 'COMMIT' WHEN 'opp-ft' THEN 'COMMIT' WHEN 'opp-sf' THEN 'BEST_CASE' ELSE seller_forecast_category END,
+        manager_forecast_category=CASE id WHEN 'opp-coinbase-renewal' THEN 'COMMIT' WHEN 'opp-pp' THEN 'BEST_CASE' WHEN 'opp-nv' THEN 'BEST_CASE' WHEN 'opp-ft' THEN 'BEST_CASE' WHEN 'opp-sf' THEN 'PIPELINE' ELSE manager_forecast_category END,
+        forecast_updated_at=$2
+       WHERE organization_id=$1 AND id IN('opp-coinbase-renewal','opp-pp','opp-nv','opp-ft','opp-sf')`,
+      [organizationId, now],
+    );
+    for (const blocker of [
+      [
+        "blocker-paypal-security-pattern",
+        "acct-paypal",
+        "opp-pp",
+        "SECURITY",
+        "HIGH",
+        "PayPal security evidence review is delaying discovery confirmation",
+        "2026-08-02T16:00:00Z",
+      ],
+      [
+        "blocker-franklin-procurement-pattern",
+        "acct-franklin",
+        "opp-ft",
+        "PROCUREMENT",
+        "HIGH",
+        "Franklin procurement and legal milestones remain behind plan",
+        "2026-07-30T16:00:00Z",
+      ],
+    ])
+      await client.query(
+        `INSERT INTO cadence_blockers(id,organization_id,account_id,opportunity_id,type,severity,description,status,visibility,first_observed_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,'OPEN','INTERNAL_ONLY',$8,$9,$9) ON CONFLICT(id) DO UPDATE SET status='OPEN',description=excluded.description,updated_at=excluded.updated_at`,
+        [blocker[0], organizationId, ...blocker.slice(1), now],
+      );
+
+    const assessments = [
+      [
+        "forecast-coinbase-initial",
+        "opp-coinbase-renewal",
+        "COMMIT",
+        "COMMIT",
+        "LIKELY",
+        82,
+        "HIGH",
+        24,
+        "Coinbase renewal intent and usage supported a moderately healthy commit.",
+        ["Strong product usage", "Customer renewal intent positive"],
+        ["Security review recently opened"],
+        [],
+        ["Initial evidence baseline"],
+        [],
+        null,
+        "2026-08-01T16:00:00Z",
+      ],
+      [
+        "forecast-coinbase-current",
+        "opp-coinbase-renewal",
+        "COMMIT",
+        "COMMIT",
+        "HIGH_RISK",
+        67,
+        "HIGH",
+        61,
+        "High-risk commit: lower-level interventions occurred, but security and executive-engagement risk remain unresolved.",
+        ["Strong product usage", "Customer renewal intent remains positive"],
+        [
+          "Security review unresolved for 21 days",
+          "2 material commitments missed or overdue",
+          "Executive engagement declined",
+          "RSM intervention and cross-functional review have not resolved risk",
+        ],
+        [],
+        [
+          "-15 probability points since the prior assessment",
+          "Security review remains unresolved",
+          "Commitment slippage increased",
+          "Executive engagement weakened",
+        ],
+        [
+          "SELLER_AROS_DISAGREEMENT",
+          "MANAGER_AROS_DISAGREEMENT",
+          "LARGE_PROBABILITY_DROP",
+          "SECURITY_PROCUREMENT_RISK",
+          "COMMITMENT_RISK",
+          "EXECUTIVE_ENGAGEMENT_RISK",
+        ],
+        "forecast-coinbase-initial",
+        "2026-08-17T16:00:00Z",
+      ],
+      [
+        "forecast-paypal-current",
+        "opp-pp",
+        "BEST_CASE",
+        "BEST_CASE",
+        "AT_RISK",
+        71,
+        "MEDIUM",
+        38,
+        "PayPal expansion has positive executive interest, with security timing still unconfirmed.",
+        ["Economic buyer requested executive value alignment"],
+        ["Security evidence review remains open"],
+        ["Customer-confirmed security date"],
+        ["Security review is associated with timing uncertainty"],
+        ["SECURITY_PROCUREMENT_RISK"],
+        null,
+        "2026-08-17T16:05:00Z",
+      ],
+      [
+        "forecast-nvidia-current",
+        "opp-nv",
+        "COMMIT",
+        "BEST_CASE",
+        "LIKELY",
+        88,
+        "HIGH",
+        16,
+        "NVIDIA usage expansion and executive engagement support upside.",
+        ["Usage expanded", "Executive briefing scheduled"],
+        [],
+        [],
+        ["Adoption strengthened the rollout evidence"],
+        ["SELLER_MANAGER_DISAGREEMENT"],
+        null,
+        "2026-08-17T16:10:00Z",
+      ],
+      [
+        "forecast-franklin-current",
+        "opp-ft",
+        "COMMIT",
+        "BEST_CASE",
+        "HIGH_RISK",
+        52,
+        "HIGH",
+        67,
+        "Franklin is high risk because procurement, qualification, and relationship evidence remain weak.",
+        [],
+        [
+          "Procurement and legal milestones delayed",
+          "Champion engagement weakened",
+          "MEDDPICC evidence incomplete",
+        ],
+        [],
+        ["Procurement and relationship risk increased"],
+        [
+          "SELLER_MANAGER_DISAGREEMENT",
+          "SELLER_AROS_DISAGREEMENT",
+          "MANAGER_AROS_DISAGREEMENT",
+          "SECURITY_PROCUREMENT_RISK",
+          "METHODOLOGY_RISK",
+        ],
+        null,
+        "2026-08-17T16:15:00Z",
+      ],
+      [
+        "forecast-snowflake-current",
+        "opp-sf",
+        "BEST_CASE",
+        "PIPELINE",
+        "AT_RISK",
+        58,
+        "MEDIUM",
+        51,
+        "Snowflake timing moved while economic-buyer evidence remains missing.",
+        [],
+        ["Close date moved", "Budget timing uncertain"],
+        ["Economic buyer confirmation"],
+        ["Budget timing reduced confidence"],
+        ["SELLER_MANAGER_DISAGREEMENT", "LATE_STAGE_EVIDENCE_GAP"],
+        null,
+        "2026-08-17T16:20:00Z",
+      ],
+    ] as const;
+    for (const assessment of assessments) {
+      const [
+        id,
+        opportunityId,
+        seller,
+        manager,
+        aros,
+        probability,
+        confidence,
+        risk,
+        rationale,
+        positive,
+        negative,
+        missing,
+        drivers,
+        discrepancies,
+        previous,
+        createdAt,
+      ] = assessment;
+      await client.query(
+        `INSERT INTO forecast_assessments(id,organization_id,opportunity_id,seller_category,manager_category,aros_category,probability,confidence,risk_score,upside_score,rationale,positive_evidence,negative_evidence,missing_evidence,change_drivers,evidence_snapshot,discrepancy_types,previous_assessment_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19) ON CONFLICT(id) DO UPDATE SET seller_category=excluded.seller_category,manager_category=excluded.manager_category,aros_category=excluded.aros_category,probability=excluded.probability,confidence=excluded.confidence,risk_score=excluded.risk_score,rationale=excluded.rationale,positive_evidence=excluded.positive_evidence,negative_evidence=excluded.negative_evidence,missing_evidence=excluded.missing_evidence,change_drivers=excluded.change_drivers,evidence_snapshot=excluded.evidence_snapshot,discrepancy_types=excluded.discrepancy_types,updated_at=excluded.updated_at`,
+        [
+          id,
+          organizationId,
+          opportunityId,
+          seller,
+          manager,
+          aros,
+          probability,
+          confidence,
+          risk,
+          Math.max(0, probability - 35),
+          rationale,
+          json(positive),
+          json(negative),
+          json(missing),
+          json(drivers),
+          json({ source: "deterministic-demo", capturedAt: createdAt }),
+          json(discrepancies),
+          previous,
+          createdAt,
+        ],
+      );
+    }
+    await client.query(
+      `INSERT INTO leadership_interventions(id,organization_id,opportunity_id,escalation_id,assessment_id,level,type,status,priority_score,summary,rationale,evidence,recommended_action,expected_outcome,idempotency_key,created_at,updated_at) VALUES('leadership-intervention-coinbase-vp',$1,'opp-coinbase-renewal','escalation-coinbase-vp-eligible','forecast-coinbase-current','VP','EXECUTIVE_ENGAGEMENT','ELIGIBLE',96,'Coinbase requires VP technical-executive engagement','Seller and manager remain at COMMIT while evidence deteriorated after manager and cross-functional intervention',$2,'Engage customer technical leadership with David Lee','Restore executive alignment and unblock the security decision','demo-coinbase-vp-intervention',$3,$3) ON CONFLICT(id) DO UPDATE SET status=CASE WHEN leadership_interventions.status IN('APPROVED','ACTIONED','MONITORING','RESOLVED') THEN leadership_interventions.status ELSE 'ELIGIBLE' END,priority_score=excluded.priority_score,rationale=excluded.rationale,evidence=excluded.evidence,updated_at=excluded.updated_at`,
+      [
+        organizationId,
+        json([
+          "$22.4M exposure",
+          "-15 probability points",
+          "security blocker open 21 days",
+          "2 commitments missed",
+          "RSM intervention attempted",
+          "cross-functional 2x2 attempted",
+        ]),
+        now,
+      ],
+    );
+    await client.query(
+      `INSERT INTO action_decisions(id,organization_id,account_id,opportunity_id,assigned_membership_id,type,recommendation,status,evidence,metadata,idempotency_key,created_at,updated_at) VALUES('decision-leadership-coinbase-vp',$1,'acct-coinbase','opp-coinbase-renewal','membership-org-cognivit-demo-user-vp-jennifer','LEADERSHIP_INTERVENTION','Approve VP technical-executive engagement for Coinbase','PENDING',$2,$3,'decision-leadership-coinbase-vp',$4,$4) ON CONFLICT(id) DO UPDATE SET recommendation=excluded.recommendation,evidence=excluded.evidence,metadata=excluded.metadata,status=CASE WHEN action_decisions.status='APPROVED' THEN 'APPROVED' ELSE 'PENDING' END,updated_at=excluded.updated_at`,
+      [
+        organizationId,
+        json(["forecast-coinbase-current", "escalation-coinbase-vp-eligible"]),
+        json({
+          leadershipInterventionId: "leadership-intervention-coinbase-vp",
+          priorityScore: 96,
+          level: "VP",
+        }),
+        now,
+      ],
+    );
+    for (const [id, opportunityId, eventType, payload] of [
+      [
+        "twin-event-forecast-coinbase-initial",
+        "opp-coinbase-renewal",
+        "FORECAST_ASSESSMENT_CREATED",
+        { assessmentId: "forecast-coinbase-initial", probability: 82 },
+      ],
+      [
+        "twin-event-forecast-coinbase-current",
+        "opp-coinbase-renewal",
+        "FORECAST_ASSESSMENT_CHANGED",
+        {
+          assessmentId: "forecast-coinbase-current",
+          probability: 67,
+          previousProbability: 82,
+        },
+      ],
+      [
+        "twin-event-leadership-coinbase-recommended",
+        "opp-coinbase-renewal",
+        "LEADERSHIP_INTERVENTION_RECOMMENDED",
+        { interventionId: "leadership-intervention-coinbase-vp" },
+      ],
+    ] as const)
+      await client.query(
+        `INSERT INTO revenue_digital_twin_events(id,organization_id,revenue_digital_twin_id,event_type,payload,occurred_at) SELECT $1,$2,t.id,$4,$5,$6 FROM opportunities o JOIN revenue_digital_twins t ON(t.organization_id=o.organization_id AND t.account_id=o.account_id) WHERE o.organization_id=$2 AND o.id=$3 ON CONFLICT(id) DO NOTHING`,
+        [id, organizationId, opportunityId, eventType, json(payload), now],
+      );
+  }
+
   async function ensureTenant(
     client: PoolClient,
     id: string,
@@ -1187,6 +1466,7 @@ async function main() {
     await seedIdentity(client);
     await seedRevenue(client);
     await seedCadence(client);
+    await seedLeadership(client);
     await client.query("COMMIT");
     console.log(
       "Seeded relational identity and deterministic revenue tenants.",

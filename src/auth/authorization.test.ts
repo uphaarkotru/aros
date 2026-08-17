@@ -238,6 +238,24 @@ describe("authorization", () => {
         permissions.managerDecisionApprove,
       ),
     ).toBe(false);
+    expect(
+      authorizePermission(
+        user("user-vp-jennifer"),
+        permissions.leadershipDecision,
+      ),
+    ).toBe(true);
+    expect(
+      authorizePermission(
+        user("user-cro-michael"),
+        permissions.leadershipDecision,
+      ),
+    ).toBe(true);
+    expect(
+      authorizePermission(
+        user("user-ae-sarah"),
+        permissions.leadershipDecision,
+      ),
+    ).toBe(false);
   });
   it("limits View As without changing persisted role", () => {
     const { user } = setup(),

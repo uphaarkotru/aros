@@ -72,7 +72,7 @@ export function TodayShell({
 }: {
   role: RevenueRole;
   isViewingAs: boolean;
-  activeSection?: "today" | "cadences";
+  activeSection?: "today" | "cadences" | "forecast";
   children: ReactNode;
 }) {
   const homeLabel = role === "AE" ? "AI Command Center" : "Today";
@@ -102,10 +102,18 @@ export function TodayShell({
               "Commitments",
             ]
           ).map((item) =>
-            item === "Cadences" || item === "Accounts" ? (
+            item === "Cadences" ||
+            item === "Accounts" ||
+            item === "Forecast" ? (
               <Link
-                className={`nav-item ${activeSection === "cadences" && item === "Cadences" ? "active" : ""}`}
-                href={item === "Cadences" ? "/cadences" : "/accounts"}
+                className={`nav-item ${(activeSection === "cadences" && item === "Cadences") || (activeSection === "forecast" && item === "Forecast") ? "active" : ""}`}
+                href={
+                  item === "Cadences"
+                    ? "/cadences"
+                    : item === "Forecast"
+                      ? "/forecast"
+                      : "/accounts"
+                }
                 key={item}
               >
                 {item}
