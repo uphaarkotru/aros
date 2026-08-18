@@ -53,6 +53,22 @@ export default async function Page(props: {
         status={data.intervention.status}
         version={data.intervention.version}
       />
+      {data.intervention.opportunity_id === "opp-coinbase-renewal" && (
+        <section className="rsm-section recommendation-panel">
+          <span className="eyebrow">NEXT HUMAN DECISION</span>
+          <h2>Prepared cross-functional 2x2</h2>
+          <p>
+            AROS prepared the forum; the 2x2 is where the team aligns on the
+            decision and commitments. It is not an approval queue item.
+          </p>
+          <Link
+            className="primary-action"
+            href="/cadences/cadence-coinbase-2x2"
+          >
+            Open Coinbase 2x2 →
+          </Link>
+        </section>
+      )}
       <div className="rsm-grid">
         <section className="rsm-section">
           <h2>Why this is surfaced</h2>

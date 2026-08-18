@@ -19,7 +19,9 @@ export class CadenceConflictError extends Error {
 }
 export class PostgresCadenceRepository {
   private pool: Pool;
-  constructor(connectionString = process.env.DATABASE_URL!) {
+  constructor(connectionString = process.env.DATABASE_URL) {
+    if (!connectionString)
+      throw new Error("DATABASE_URL is required for cadence persistence");
     this.pool = new Pool({
       connectionString,
       max: Number(process.env.DATABASE_POOL_MAX ?? 5),
@@ -1340,6 +1342,32 @@ export class PostgresCadenceRepository {
           session.opportunity_id,
           input.actorMembershipId,
         );
+      if (session.opportunity_id === "opp-coinbase-renewal") {
+        const template = (
+          await c.query(
+            `SELECT code FROM cadence_templates WHERE organization_id=$1 AND id=$2`,
+            [input.organizationId, session.template_id],
+          )
+        ).rows[0];
+        const nextState =
+          template?.code === "CROSS_FUNCTIONAL_2X2"
+            ? "2X2_EXECUTED"
+            : template?.code === "AE_SE_SYNC" ||
+                template?.code === "SECURITY_REVIEW"
+              ? "MANAGER_INTERVENTION_REQUIRED"
+              : null;
+        if (nextState)
+          await c.query(
+            `INSERT INTO demo_scenario_states(id,organization_id,scenario_key,state,version,updated_at)
+             VALUES($1,$2,'coinbase-strategic-renewal',$3,1,now())
+             ON CONFLICT(organization_id,scenario_key) DO UPDATE SET state=excluded.state,version=demo_scenario_states.version+1,updated_at=now()`,
+            [
+              `demo-state-${input.organizationId}-coinbase-strategic-renewal`,
+              input.organizationId,
+              nextState,
+            ],
+          );
+      }
       await this.audit(
         c,
         input.organizationId,

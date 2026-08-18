@@ -1,2 +1,60 @@
 import Link from "next/link";
-export function ApplicationShell({children,active}:{children:React.ReactNode;active:"accounts"|"command"}){return <div className="app-shell"><aside className="sidebar" aria-label="Main navigation"><div className="brand"><strong>CogniVit<span>.ai</span></strong><small>AROS · AUTONOMOUS REVENUE OS</small></div><nav><Link className={`nav-item ${active==="command"?"active":""}`} href="/"><span className="glyph">⌁</span>AI Command Center</Link><span className="nav-item"><span className="glyph">✣</span>AI Workforce</span><Link className={`nav-item ${active==="accounts"?"active":""}`} href="/accounts"><span className="glyph">▣</span>Accounts</Link>{["Decisions","Signals","Forecast","Executive","Settings"].map((item)=><span className="nav-item" key={item}><span className="glyph">◇</span>{item}</span>)}</nav><div className="system-status"><span><i/> LIVE SYSTEM</span><small>214 accounts monitored</small></div></aside><main className="main-content accounts-main">{children}</main></div>}
+const navigation = [
+  ["Decisions", "/"],
+  ["Signals", "/accounts"],
+  ["Forecast", "/forecast"],
+  ["Executive", "/today/vp-sales"],
+] as const;
+export function ApplicationShell({
+  children,
+  active,
+}: {
+  children: React.ReactNode;
+  active: "accounts" | "command";
+}) {
+  return (
+    <div className="app-shell">
+      <aside className="sidebar" aria-label="Main navigation">
+        <div className="brand">
+          <strong>
+            CogniVit<span>.ai</span>
+          </strong>
+          <small>AROS · AUTONOMOUS REVENUE OS</small>
+        </div>
+        <nav>
+          <Link
+            className={`nav-item ${active === "command" ? "active" : ""}`}
+            href="/"
+          >
+            <span className="glyph">⌁</span>AI Command Center
+          </Link>
+          <span className="nav-item">
+            <span className="glyph">✣</span>AI Workforce
+          </span>
+          <Link
+            className={`nav-item ${active === "accounts" ? "active" : ""}`}
+            href="/accounts"
+          >
+            <span className="glyph">▣</span>Accounts
+          </Link>
+          {navigation.map(([label, href]) => (
+            <Link className="nav-item" href={href} key={label}>
+              <span className="glyph">◇</span>
+              {label}
+            </Link>
+          ))}
+          <Link className="nav-item" href="/admin/settings">
+            <span className="glyph">◇</span>Settings
+          </Link>
+        </nav>
+        <div className="system-status">
+          <span>
+            <i /> LIVE SYSTEM
+          </span>
+          <small>214 accounts monitored</small>
+        </div>
+      </aside>
+      <main className="main-content accounts-main">{children}</main>
+    </div>
+  );
+}

@@ -18,6 +18,7 @@
     "db:import-identity": "tsx scripts/db-import-identity.ts",
     "db:reset": "tsx scripts/db-reset.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
+    "demo:reset": "tsx scripts/db-reset-coinbase.ts",
     "test:postgres": "vitest run src/db/postgres.integration.test.ts src/db/identity-concurrency.integration.test.ts src/db/cadence.integration.test.ts src/db/leadership.integration.test.ts src/db/leading-indicator.integration.test.ts"
   },
   "dependencies": {
