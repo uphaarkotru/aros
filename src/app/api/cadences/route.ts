@@ -60,14 +60,15 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  if (
-    !body.opportunityId ||
-    !identity.scope?.opportunityIds.includes(body.opportunityId)
-  )
+  if (!body.opportunityId && !body.accountId)
     return NextResponse.json(
-      { error: "Opportunity outside scope" },
+      { error: "An account or opportunity is required" },
       { status: 403 },
     );
+  if (body.opportunityId && !identity.scope?.opportunityIds.includes(body.opportunityId))
+    return NextResponse.json({ error: "Opportunity outside scope" }, { status: 403 });
+  if (body.accountId && !identity.scope?.accountIds.includes(body.accountId))
+    return NextResponse.json({ error: "Account outside scope" }, { status: 403 });
   const store = identityRepository.read(),
     activeTenantMemberships = new Set(
       store.memberships
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
         .filter(
           (item) =>
             item.organizationId === identity.organization.id &&
-            item.opportunityId === body.opportunityId,
+            (body.opportunityId ? item.opportunityId === body.opportunityId : item.accountId === body.accountId),
         )
         .map((item) => item.membershipId),
     );
@@ -115,7 +116,7 @@ export async function POST(request: Request) {
       templateCode: String(body.templateCode ?? "CUSTOM"),
       scope: String(body.scope ?? "INTERNAL"),
       accountId: body.accountId ? String(body.accountId) : null,
-      opportunityId: String(body.opportunityId),
+      opportunityId: body.opportunityId ? String(body.opportunityId) : null,
       participants: body.participants ?? [],
       agenda: Array.isArray(body.agenda) ? body.agenda : [],
       actorUserId: actor.id,

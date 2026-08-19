@@ -454,16 +454,15 @@ export class PostgresCadenceRepository {
       actorMembershipId?: string;
     },
   ): Promise<CadenceParticipantInput[]> {
-    if (!input.opportunityId)
-      return input.actorMembershipId
-        ? [
-            {
-              membershipId: input.actorMembershipId,
-              participantRole: "OWNER",
-              required: true,
-            },
-          ]
-        : [];
+    if (!input.opportunityId) {
+      if (!input.actorMembershipId) return [];
+      const participants: CadenceParticipantInput[] = [{ membershipId: input.actorMembershipId, participantRole: "OWNER", required: true }];
+      if (input.templateCode === "MANAGER_1_ON_1") {
+        const manager = (await c.query<{ target_membership_id: string }>(`SELECT target_membership_id FROM organization_relationships WHERE organization_id=$1 AND source_membership_id=$2 AND relationship_type='REPORTS_TO' AND effective_to IS NULL ORDER BY is_primary DESC LIMIT 1`, [input.organizationId, input.actorMembershipId])).rows[0];
+        if (manager) participants.push({ membershipId: manager.target_membership_id, participantRole: "MANAGER", required: true });
+      }
+      return participants;
+    }
     const team = (
         await c.query(
           `SELECT membership_id,participation_type FROM revenue_team_assignments WHERE organization_id=$1 AND opportunity_id=$2 ORDER BY is_primary_owner DESC,created_at`,
@@ -762,6 +761,62 @@ export class PostgresCadenceRepository {
           input.managerMembershipId,
         );
       return updated;
+    });
+  }
+
+  /** Creates the manager queue item produced by an AE escalation request. */
+  async requestManagerIntervention(input: {
+    organizationId: string;
+    sellerMembershipId: string;
+    accountId?: string;
+    opportunityId?: string;
+    summary: string;
+    rationale: string;
+    evidence: string[];
+    recommendedAction: string;
+    actorUserId: string;
+  }) {
+    if (!input.accountId && !input.opportunityId)
+      throw new CadenceConflictError("An account or opportunity is required.");
+    return this.tx(async (c) => {
+      const relationship = (
+        await c.query<{ managerMembershipId: string }>(
+          `SELECT target_membership_id AS "managerMembershipId" FROM organization_relationships WHERE organization_id=$1 AND source_membership_id=$2 AND relationship_type='REPORTS_TO' AND effective_to IS NULL ORDER BY is_primary DESC LIMIT 1`,
+          [input.organizationId, input.sellerMembershipId],
+        )
+      ).rows[0];
+      if (!relationship) throw new CadenceConflictError("No active manager relationship found.");
+      const motion = (
+        await c.query<{ accountId: string | null; opportunityId: string | null; amount: number | null }>(
+          `SELECT o.account_id AS "accountId",o.id AS "opportunityId",o.amount::float8 AS amount FROM opportunities o WHERE o.organization_id=$1 AND (($2::text IS NOT NULL AND o.id=$2) OR ($2::text IS NULL AND o.account_id=$3)) LIMIT 1`,
+          [input.organizationId, input.opportunityId ?? null, input.accountId ?? null],
+        )
+      ).rows[0];
+      if (!motion) throw new CadenceConflictError("Revenue motion not found in this organization.");
+      const existing = (
+        await c.query(
+          `SELECT * FROM manager_interventions WHERE organization_id=$1 AND seller_membership_id=$2 AND account_id IS NOT DISTINCT FROM $3 AND opportunity_id IS NOT DISTINCT FROM $4 ORDER BY updated_at DESC LIMIT 1`,
+          [input.organizationId, input.sellerMembershipId, motion.accountId, motion.opportunityId],
+        )
+      ).rows[0];
+      if (existing) {
+        const refreshed = (
+          await c.query(
+            `UPDATE manager_interventions SET status='OPEN',summary=$3,rationale=$4,evidence=$5,recommended_action=$6,version=version+1,updated_at=now() WHERE organization_id=$1 AND id=$2 RETURNING *`,
+            [input.organizationId, existing.id, input.summary, input.rationale, json(input.evidence), input.recommendedAction],
+          )
+        ).rows[0];
+        return refreshed;
+      }
+      const id = `intervention-request-${createHash("sha256").update(`${input.organizationId}:${relationship.managerMembershipId}:${motion.opportunityId ?? motion.accountId}`).digest("hex").slice(0, 24)}`;
+      const row = (
+        await c.query(
+          `INSERT INTO manager_interventions(id,organization_id,manager_membership_id,seller_membership_id,account_id,opportunity_id,type,status,priority_score,severity,summary,rationale,evidence,recommended_action,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,'SELLER_COACHING','OPEN',75,'HIGH',$7,$8,$9,$10,now(),now()) ON CONFLICT(organization_id,id) DO UPDATE SET status='OPEN',summary=excluded.summary,rationale=excluded.rationale,evidence=excluded.evidence,recommended_action=excluded.recommended_action,version=manager_interventions.version+1,updated_at=now() RETURNING *`,
+          [id,input.organizationId,relationship.managerMembershipId,input.sellerMembershipId,motion.accountId,motion.opportunityId,input.summary,input.rationale,json(input.evidence),input.recommendedAction],
+        )
+      ).rows[0];
+      await this.audit(c,input.organizationId,input.actorUserId,"MANAGER_INTERVENTION_REQUESTED","manager_intervention",id,{sellerMembershipId:input.sellerMembershipId,accountId:motion.accountId,opportunityId:motion.opportunityId});
+      return row;
     });
   }
   async updateCommitment(input: {

@@ -44,7 +44,7 @@ export function createDemoIdentityStore(): IdentityStore {
     organizations: [
       {
         id: organizationId,
-        name: "CogniVit Demo Enterprise",
+        name: "Coinbase Enterprise Demo",
         slug: "cognivit-demo-enterprise",
         status: "ACTIVE",
         createdAt: now,
@@ -68,14 +68,14 @@ export function createDemoIdentityStore(): IdentityStore {
         "AE",
         null,
         null,
-        { platformRole: "SUPER_ADMIN", isAdmin: false },
+        { platformRole: "SUPER_ADMIN", isAdmin: false, isDemoUser: false },
       ),
       user(
         "user-org-admin",
         "Avery",
         "Stone",
         "admin@demo.cognivit.ai",
-        "CRO",
+        "REVOPS",
         null,
         null,
         { isAdmin: true },

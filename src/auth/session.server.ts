@@ -11,6 +11,12 @@ import { getMembership, primaryRoleContext } from "./tenant-model";
 import { resolvePermissions } from "./authorization";
 export const SESSION_COOKIE = "aros_session";
 const SESSION_SECONDS = 60 * 60 * 12;
+const simulationPriority = [
+  "user-ae-sarah",
+  "user-rsm-mark",
+  "user-vp-jennifer",
+  "user-cro-michael",
+];
 const tokenHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 export async function createSession(
@@ -160,7 +166,16 @@ export async function getAuthenticatedIdentity() {
             ]
           : [];
       })
-      .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      .sort((a, b) => {
+        const aPriority = simulationPriority.indexOf(a.id);
+        const bPriority = simulationPriority.indexOf(b.id);
+        if (aPriority !== -1 || bPriority !== -1) {
+          if (aPriority === -1) return 1;
+          if (bPriority === -1) return -1;
+          if (aPriority !== bPriority) return aPriority - bPriority;
+        }
+        return a.displayName.localeCompare(b.displayName);
+      }),
     effectiveRole,
     viewUser: toPublicUser(viewUser ?? user),
     primaryRole: primary.definition ?? null,

@@ -1,4 +1,3 @@
-import "../../rsm.css";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireIdentity } from "@/auth/guards.server";

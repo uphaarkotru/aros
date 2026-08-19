@@ -1,9 +1,12 @@
 import Link from "next/link";
 import type { AccountDigitalTwin } from "@/domain/accounts/account-digital-twin";
 import type { LeadingIndicatorRecord } from "@/db/leading-indicator-repository";
+import {
+  aggregateRevenueExecutionSources,
+  summarizeRevenueExecutionHealth,
+} from "@/revenue-execution-indicators/domain";
 import { AccountDetail } from "./account-detail";
 import { EvidenceAndConfidence } from "./evidence/evidence-and-confidence";
-import { LeadingIndicatorPanel } from "./leading-indicator-panel";
 export function ReconciledAccountDetail({
   twin,
   leadingIndicators = [],
@@ -24,8 +27,49 @@ export function ReconciledAccountDetail({
     occurred_at: string;
   }>;
 }) {
+  const accountIndicators = leadingIndicators.length
+    ? aggregateRevenueExecutionSources({
+        organizationId: leadingIndicators[0].organization_id,
+        accountId: twin.accountId,
+        sources: leadingIndicators.map((indicator) => ({
+          id: indicator.id,
+          indicatorType: indicator.indicator_type,
+          score: indicator.score,
+          status: indicator.status,
+          rationale: indicator.rationale,
+          evidence: indicator.evidence,
+          observedAt: indicator.observed_at,
+          accountId: indicator.account_id ?? twin.accountId,
+          opportunityId: indicator.opportunity_id ?? undefined,
+        })),
+      })
+    : [];
+  const derivedHealth = summarizeRevenueExecutionHealth(accountIndicators);
+  const derivedTwin = accountIndicators.some(
+    (indicator) => indicator.score !== null,
+  )
+    ? {
+        ...twin,
+        health: {
+          ...twin.health,
+          overallScore: derivedHealth.score ?? twin.health.overallScore,
+          overallStatus:
+            derivedHealth.status === "UNKNOWN"
+              ? twin.health.overallStatus
+              : (derivedHealth.status
+                  .toLowerCase()
+                  .replaceAll("_", "-") as typeof twin.health.overallStatus),
+        },
+      }
+    : twin;
   return (
     <>
+      <AccountDetail
+        twin={derivedTwin}
+        leadingIndicators={leadingIndicators}
+        coachingInsights={coachingInsights}
+        timeline={timeline}
+      />
       {twin.accountId === "acct-coinbase" && (
         <section className="renewal-entry">
           <div>
@@ -46,14 +90,8 @@ export function ReconciledAccountDetail({
           </Link>
         </section>
       )}
-      <LeadingIndicatorPanel
-        indicators={leadingIndicators}
-        coachingInsights={coachingInsights}
-        timeline={timeline}
-      />
-      <AccountDetail twin={twin} />
       <div className="account-evidence-region">
-        <EvidenceAndConfidence twin={twin} />
+        <EvidenceAndConfidence twin={derivedTwin} />
       </div>
     </>
   );

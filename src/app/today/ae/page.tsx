@@ -7,6 +7,11 @@ import { cadenceRepository } from "@/db/cadence-repository";
 import { identityRepository } from "@/auth/repository.server";
 import { getMembership } from "@/auth/tenant-model";
 import { leadingIndicatorRepository } from "@/db/leading-indicator-repository";
+import {
+  aggregateRevenueExecutionIndicators,
+  aggregateRevenueExecutionSources,
+  summarizeRevenueExecutionHealth,
+} from "@/revenue-execution-indicators/domain";
 
 export default async function Page() {
   const identity = await requireIdentity();
@@ -19,37 +24,76 @@ export default async function Page() {
     ),
     accountIds = identity.scope?.accountIds ?? [];
   const allowed = new Set(accountIds);
-  const [
-    actions,
-    organizationAccounts,
-    cadences,
-    leadingIndicators,
-    coachingInsights,
-  ] = await Promise.all([
-    revenueRepository.listActions(identity.organization.id, accountIds),
-    revenueRepository.listAccounts(identity.organization.id),
-    cadenceRepository
-      ? cadenceRepository.listCadences(
-          identity.organization.id,
-          effectiveMembership?.id ?? identity.membership.id,
-        )
-      : [],
-    leadingIndicatorRepository && effectiveMembership
-      ? leadingIndicatorRepository.listForViewer({
-          organizationId: identity.organization.id,
-          membershipId: effectiveMembership.id,
-        })
-      : [],
-    leadingIndicatorRepository && effectiveMembership
-      ? leadingIndicatorRepository.listCoachingInsights({
-          organizationId: identity.organization.id,
-          membershipId: effectiveMembership.id,
-        })
-      : [],
-  ]);
-  const accounts = organizationAccounts
+  const [actions, organizationAccounts, cadences, leadingIndicators] =
+    await Promise.all([
+      revenueRepository.listActions(identity.organization.id, accountIds),
+      revenueRepository.listAccounts(identity.organization.id),
+      cadenceRepository
+        ? cadenceRepository.listCadences(
+            identity.organization.id,
+            effectiveMembership?.id ?? identity.membership.id,
+          )
+        : [],
+      leadingIndicatorRepository && effectiveMembership
+        ? leadingIndicatorRepository.listForViewer({
+            organizationId: identity.organization.id,
+            membershipId: effectiveMembership.id,
+          })
+        : [],
+    ]);
+  const membershipId = effectiveMembership?.id ?? identity.membership.id;
+  const toSource = (indicator: (typeof leadingIndicators)[number]) => ({
+    id: indicator.id,
+    indicatorType: indicator.indicator_type,
+    score: indicator.score,
+    status: indicator.status,
+    rationale: indicator.rationale,
+    evidence: indicator.evidence,
+    observedAt: indicator.observed_at,
+    accountId: indicator.account_id ?? undefined,
+    opportunityId: indicator.opportunity_id ?? undefined,
+  });
+  const scopedSources = leadingIndicators
+    .filter(
+      (indicator) => !indicator.account_id || allowed.has(indicator.account_id),
+    )
+    .map(toSource);
+  const accountRollups = organizationAccounts
     .filter((account) => allowed.has(account.id))
-    .map(({ id, name, segment, status }) => ({ id, name, segment, status }));
+    .map((account) => {
+      const accountIndicators = aggregateRevenueExecutionSources({
+        organizationId: identity.organization.id,
+        membershipId,
+        accountId: account.id,
+        sources: scopedSources.filter(
+          (indicator) => indicator.accountId === account.id,
+        ),
+      });
+      return {
+        account,
+        indicators: accountIndicators,
+      };
+    });
+  const executionIndicators = aggregateRevenueExecutionIndicators({
+    organizationId: identity.organization.id,
+    membershipId,
+    scopeLabel: "account",
+    children: accountRollups.map(({ account, indicators }) => ({
+      id: account.id,
+      indicators,
+    })),
+  });
+  const accounts = accountRollups.map(({ account, indicators }) => {
+    const health = summarizeRevenueExecutionHealth(indicators);
+    return {
+      id: account.id,
+      name: account.name,
+      segment: account.segment,
+      status: account.status,
+      healthScore: health.score,
+      healthStatus: health.status,
+    };
+  });
   const accountNames = new Map(
     organizationAccounts.map((account) => [account.id, account.name]),
   );
@@ -63,25 +107,28 @@ export default async function Page() {
   );
 
   return (
-    <MorningBriefingDashboard
-      initialDecisions={decisions}
-      assignedAccounts={accounts}
-      cadences={cadences.map((cadence) => ({
-        id: cadence.id,
-        status: cadence.status,
-        scope: cadence.scope,
-        scheduledAt: cadence.scheduled_at,
-        templateCode: cadence.template_code,
-        templateName: cadence.template_name,
-        opportunityName: cadence.opportunity_name,
-        accountName: cadence.account_name,
-        participantNames: cadence.participant_names,
-        preparationSummary: cadence.preparation_summary,
-        agendaCount: cadence.agenda_count,
-        carryForwardCount: cadence.carry_forward_count,
-      }))}
-      leadingIndicators={leadingIndicators}
-      coachingInsights={coachingInsights}
-    />
+    <>
+      <MorningBriefingDashboard
+        initialDecisions={decisions}
+        assignedAccounts={accounts}
+        cadences={cadences.map((cadence) => ({
+          id: cadence.id,
+          status: cadence.status,
+          scope: cadence.scope,
+          scheduledAt: cadence.scheduled_at,
+          templateCode: cadence.template_code,
+          templateName: cadence.template_name,
+          opportunityName: cadence.opportunity_name,
+          accountName: cadence.account_name,
+          participantNames: cadence.participant_names,
+          preparationSummary: cadence.preparation_summary,
+          agendaCount: cadence.agenda_count,
+          carryForwardCount: cadence.carry_forward_count,
+        }))}
+        executionIndicators={executionIndicators}
+        executionIndicatorsTitle="My territory execution health"
+        embedded
+      />
+    </>
   );
 }

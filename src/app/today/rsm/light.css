@@ -1,0 +1,296 @@
+/* Shared light operating surface for routes that use the cadence cards. */
+.rsm-today {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 32px;
+  color: #172033;
+}
+.rsm-today .rsm-hero {
+  border: 1px solid #dbe3ec;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+.rsm-today .rsm-hero p,
+.rsm-today .section-heading p,
+.rsm-today .scope-note {
+  color: #64748b;
+}
+.rsm-today .eyebrow {
+  color: #2961ed;
+}
+.rsm-today .rsm-section {
+  border: 1px solid #dbe3ec;
+  background: #fff;
+  color: #172033;
+}
+.rsm-today .rsm-section h2,
+.rsm-today .rsm-section h3,
+.rsm-today .cadence-meeting-body h3,
+.rsm-today .cadence-meeting-body p,
+.rsm-today .cadence-meeting-facts {
+  color: #172033;
+}
+.rsm-today .cadence-calendar .section-heading > span,
+.rsm-today .cadence-hero-time {
+  background: #eef4ff;
+  color: #1d4ed8;
+}
+.rsm-today .cadence-meeting-card {
+  border: 1px solid #dbe3ec;
+  background: #f8fafc;
+  color: #172033;
+}
+.rsm-today .cadence-meeting-card:hover {
+  border-color: #93b4ff;
+  background: #fff;
+}
+.rsm-today .cadence-meeting-time span,
+.rsm-today .cadence-meeting-body small,
+.rsm-today .cadence-meeting-facts dt {
+  color: #64748b;
+}
+.rsm-today .cadence-meeting-body blockquote {
+  color: #475569;
+}
+.rsm-today .cadence-meeting-facts dd {
+  color: #1d4ed8;
+}
+.rsm-today .scope-note {
+  background: #f1f5f9;
+}
+.rsm-today .empty-brief {
+  color: #64748b;
+}
+.rsm-today .intervention-card,
+.rsm-today .cadence-signal,
+.rsm-today .agenda-card,
+.rsm-today .cadence-action-row,
+.rsm-today .cadence-completion {
+  border: 1px solid #dbe3ec;
+  background: #fff;
+  color: #172033;
+}
+.rsm-today .intervention-card p,
+.rsm-today .intervention-card ul,
+.rsm-today .cadence-signal p,
+.rsm-today .agenda-card p,
+.rsm-today .agenda-card small,
+.rsm-today .cadence-action-row small,
+.rsm-today .cadence-action-row p,
+.rsm-today .cadence-action-row label,
+.rsm-today .cadence-completion label,
+.rsm-today .recommendation-panel small,
+.rsm-today .evidence-list {
+  color: #475569;
+}
+.rsm-today .intervention-card:hover {
+  border-color: #93b4ff;
+  background: #f8fafc;
+}
+.rsm-today .intervention-score {
+  background: #eef4ff;
+  color: #1d4ed8;
+}
+.rsm-today .rsm-principle,
+.rsm-today .scope-note {
+  border-color: #c7d7f8;
+  color: #1d4ed8;
+}
+.rsm-today .recommendation-panel {
+  border-left-color: #2961ed;
+  background: #eef4ff;
+}
+.rsm-today .coverage-grid span {
+  background: #f1f5f9;
+  color: #475569;
+}
+.rsm-today .cadence-action-row input,
+.rsm-today .cadence-action-row select,
+.rsm-today .cadence-action-create input,
+.rsm-today .cadence-action-create select,
+.rsm-today .cadence-completion input,
+.rsm-today .cadence-completion textarea {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #172033;
+}
+.rsm-today .cadence-action-row button,
+.rsm-today .cadence-action-create button,
+.rsm-today .cadence-completion button {
+  border-color: #2961ed;
+  background: #2961ed;
+  color: #fff;
+}
+
+.performance-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.performance-summary-grid article {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.performance-summary-grid strong {
+  color: #172033;
+  font-size: 1.45rem;
+}
+.performance-summary-grid span,
+.performance-count {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+.performance-team {
+  margin-top: 20px;
+}
+.performance-member-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+.performance-member-card {
+  display: block;
+  padding: 18px;
+  border: 1px solid #dbe3ec;
+  border-radius: 14px;
+  background: #fff;
+  color: #172033;
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.performance-member-card:hover {
+  border-color: #93b4ff;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+.performance-member-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.performance-member-heading h3 {
+  margin: 4px 0 0;
+}
+.performance-health {
+  display: grid;
+  width: 60px;
+  height: 60px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: #f8fafc;
+}
+.performance-health strong {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.performance-health span {
+  color: #64748b;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+}
+.performance-health-healthy {
+  border-color: #9bd7b8;
+  background: #effaf4;
+  color: #087443;
+}
+.performance-health-watch {
+  border-color: #e8c57a;
+  background: #fff8e8;
+  color: #9a5b00;
+}
+.performance-health-at_risk,
+.performance-health-critical {
+  border-color: #efadb4;
+  background: #fff1f2;
+  color: #b42332;
+}
+.performance-member-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+.performance-member-metrics span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+.performance-member-metrics strong {
+  color: #172033;
+  margin-right: 4px;
+}
+.performance-drilldown {
+  display: block;
+  margin-top: 16px;
+  color: #2961ed;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.performance-detail-hero {
+  margin-top: 12px;
+}
+.performance-back-link {
+  display: inline-block;
+  color: #2961ed;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.performance-detail-metrics {
+  margin-top: 20px;
+}
+.performance-commitments {
+  margin-top: 20px;
+}
+.performance-commitment-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.performance-commitment-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.performance-commitment-list article:last-child {
+  border-bottom: 0;
+}
+.performance-commitment-list strong,
+.performance-commitment-list small {
+  display: block;
+}
+.performance-commitment-list small {
+  margin-top: 4px;
+  color: #64748b;
+}
+.performance-commitment-list > article > span {
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+@media (max-width: 760px) {
+  .performance-summary-grid,
+  .performance-member-grid {
+    grid-template-columns: 1fr;
+  }
+}

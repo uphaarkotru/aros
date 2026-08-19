@@ -1,69 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { IdentityControls } from "./identity-controls";
-import { roleDisplay } from "@/auth/permissions";
+import { roleDisplay, todayPath } from "@/auth/permissions";
 import type { RevenueRole } from "@/auth/types";
-const nav: Partial<Record<RevenueRole, string[]>> = {
-  SDR: [
-    "Accounts / Prospects",
-    "Prospecting",
-    "Actions",
-    "Cadences",
-    "Meetings",
-    "Performance",
-  ],
-  AE: [
-    "AI Workforce",
-    "Accounts",
-    "Cadences",
-    "Decisions",
-    "Signals",
-    "Forecast",
-    "Executive",
-    "Settings",
-  ],
-  RSM: [
-    "Accounts",
-    "Opportunities",
-    "Actions",
-    "Cadences",
-    "Forecast",
-    "Performance",
-    "Management",
-  ],
-  SALES_ENGINEER: [
-    "Accounts",
-    "Opportunities",
-    "Technical Work",
-    "Cadences",
-    "Commitments",
-  ],
-  SALES_ENGINEER_MANAGER: [
-    "Technical Portfolio",
-    "Capacity",
-    "Team",
-    "Cadences",
-    "Commitments",
-  ],
-  PARTNER_SALES: [
-    "Accounts",
-    "Opportunities",
-    "Partners",
-    "Actions",
-    "Cadences",
-    "Meetings",
-  ],
-  VP_SALES: [
-    "Accounts",
-    "Opportunities",
-    "Cadences",
-    "Forecast",
-    "Performance",
-    "Management",
-    "Learning",
-  ],
-  CRO: ["Forecast", "Cadences", "Executive", "Learning", "Governance"],
-};
+import { navigationForRole } from "./navigation-config";
 export function TodayShell({
   role,
   isViewingAs,
@@ -72,10 +12,20 @@ export function TodayShell({
 }: {
   role: RevenueRole;
   isViewingAs: boolean;
-  activeSection?: "today" | "cadences" | "forecast";
+  organization?: string;
+  scope?: string;
+  signedInAs?: string;
+  viewingAs?: string;
+  activeSection?:
+    | "today"
+    | "accounts"
+    | "opportunities"
+    | "cadences"
+    | "forecast"
+    | "performance";
   children: ReactNode;
 }) {
-  const homeLabel = role === "AE" ? "AI Command Center" : "Today";
+  const homeLabel = "Today";
 
   return (
     <div className="role-shell">
@@ -89,38 +39,22 @@ export function TodayShell({
         <nav>
           <Link
             className={`nav-item ${activeSection === "today" ? "active" : ""}`}
-            href="/today"
+            href={todayPath[role]}
           >
             {homeLabel}
           </Link>
-          {(
-            nav[role] ?? [
-              "Accounts",
-              "Opportunities",
-              "Actions",
-              "Cadences",
-              "Commitments",
-            ]
-          ).map((item) =>
-            item === "Cadences" ||
-            item === "Accounts" ||
-            item === "Forecast" ? (
+          {navigationForRole(role).map((item) =>
+            item.href ? (
               <Link
-                className={`nav-item ${(activeSection === "cadences" && item === "Cadences") || (activeSection === "forecast" && item === "Forecast") ? "active" : ""}`}
-                href={
-                  item === "Cadences"
-                    ? "/cadences"
-                    : item === "Forecast"
-                      ? "/forecast"
-                      : "/accounts"
-                }
-                key={item}
+                className={`nav-item ${(activeSection === "cadences" && item.label === "Cadences") || (activeSection === "forecast" && item.label === "Forecast") || (activeSection === "performance" && item.label === "Performance") || (activeSection === "accounts" && item.label.includes("Account")) || (activeSection === "opportunities" && item.label === "Opportunities") ? "active" : ""}`}
+                href={item.href}
+                key={item.label}
               >
-                {item}
+                {item.label}
               </Link>
             ) : (
-              <span className="nav-item" key={item}>
-                {item}
+              <span className="nav-item" key={item.label}>
+                {item.label}
               </span>
             ),
           )}
@@ -135,11 +69,6 @@ export function TodayShell({
           </div>
         )}
         <header className="role-header">
-          <div>
-            <span className="eyebrow">
-              {roleDisplay[role]} OPERATING EXPERIENCE
-            </span>
-          </div>
           <IdentityControls />
         </header>
         {children}

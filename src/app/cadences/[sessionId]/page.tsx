@@ -6,7 +6,6 @@ import { identityRepository } from "@/auth/repository.server";
 import { getMembership } from "@/auth/tenant-model";
 import { CompletionForm } from "./completion-form";
 import { ActionItems } from "./action-items";
-import "../../today/rsm/rsm.css";
 import { ApplicationShell } from "@/components/application-shell";
 
 const meetingTime = (value: string | null) =>
@@ -75,8 +74,11 @@ export default async function Page({
       }),
     );
   return (
-    <ApplicationShell active="accounts">
-      <main className="rsm-today">
+    <ApplicationShell
+      active="cadences"
+      role={identity.effectiveRole ?? undefined}
+    >
+      <main className="rsm-today operating-light">
         <Link className="back-link" href="/today">
           ← Today
         </Link>

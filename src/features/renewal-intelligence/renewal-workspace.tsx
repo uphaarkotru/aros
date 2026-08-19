@@ -1,8 +1,570 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect -- persisted human workflow is hydrated after mount. */
-import Link from "next/link";import {useEffect,useMemo,useReducer,useState,useTransition} from "react";import type {DecisionStatus,GovernedDecision} from "@/domain/decisions/types";import type {RenewalEvidenceReference,RenewalPlay,RenewalWorkspaceMode,RenewalWorkspaceViewModel} from "@/domain/renewal-intelligence/types";import {humanWorkflowReducer,mergeHumanState,type HumanStateMap} from "@/features/morning-briefing/state";import {renewalIntelligenceConfig} from "@/renewal-intelligence/config";import {runRealCoinbaseRenewalAction} from "@/app/dev/provider-readiness/actions";
-const money=(value:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",notation:"compact",maximumFractionDigits:1}).format(value),date=(value:string)=>value?new Date(value).toLocaleDateString():"Not scheduled",pretty=(value:string)=>value.replaceAll("-"," ").replace(/\b\w/g,letter=>letter.toUpperCase());
-function EvidenceList({items}:{items:RenewalEvidenceReference[]}){return <div className="renewal-evidence-list">{items.map(item=><details key={item.id}><summary><span>{item.title}</span><strong>{Math.round(item.confidence*100)}%</strong></summary><p>{item.summary}</p><dl><div><dt>Source</dt><dd>{pretty(item.source)}</dd></div><div><dt>Observed</dt><dd>{date(item.timestamp)}</dd></div><div><dt>Freshness</dt><dd>{pretty(item.freshness)}</dd></div><div><dt>Evidence ID</dt><dd>{item.id}</dd></div><div><dt>Fact IDs</dt><dd>{item.factIds.join(", ")||"None mapped"}</dd></div><div><dt>Lineage</dt><dd>{item.lineageIds.join(", ")||"No lineage mapped"}</dd></div><div><dt>Conflicts</dt><dd>{item.conflictIds.join(", ")||"None"}</dd></div></dl></details>)}</div>}
-function PlayCard({play,decision,onStatus,onEdit,onDelegate}:{play:RenewalPlay;decision:GovernedDecision;onStatus:(status:DecisionStatus)=>void;onEdit:(value:string)=>void;onDelegate:(owner:string)=>void}){const[editing,setEditing]=useState(false),[draft,setDraft]=useState(decision.recommendedAction),[delegating,setDelegating]=useState(false),[owner,setOwner]=useState("Regional Sales Manager");return <article className="renewal-play"><header><span className={`renewal-priority priority-${play.priority}`}>{play.priority} priority</span><span>{pretty(decision.status)}</span><span>Evaluation {play.evaluationScore}/100</span></header><h3>{play.title}</h3><p className="renewal-play-action">{decision.recommendedAction}</p><div className="renewal-play-metrics"><span><small>Expected impact</small><strong>{play.expectedImpact}</strong></span><span><small>Revenue protected</small><strong>{money(play.estimatedRevenueProtected)}</strong></span><span><small>AI confidence</small><strong>{play.aiConfidence}%</strong></span><span><small>Deadline</small><strong>{date(play.suggestedDeadline)}</strong></span></div><p><strong>Owner:</strong> {play.recommendedOwner} · <strong>Participants:</strong> {play.requiredParticipants.join(", ")}</p><details><summary>Why AROS recommends this</summary><p>{play.reasoningSummary}</p><EvidenceList items={play.supportingEvidence}/></details>{editing&&<div className="renewal-inline-form"><textarea aria-label="Edit renewal recommendation" value={draft} onChange={event=>setDraft(event.target.value)}/><button onClick={()=>{onEdit(draft);setEditing(false);}}>Save edit</button></div>}{delegating&&<div className="renewal-inline-form"><label>Delegate to<input aria-label="Delegate owner" value={owner} onChange={event=>setOwner(event.target.value)}/></label><button onClick={()=>{onDelegate(owner);setDelegating(false);}}>Confirm delegate</button></div>}<div className="renewal-play-actions"><button onClick={()=>onStatus("approved")}>Approve</button><button onClick={()=>setEditing(true)}>Edit</button><button onClick={()=>onStatus("dismissed")}>Reject</button><button onClick={()=>setDelegating(true)}>Delegate</button><button onClick={()=>onStatus("snoozed")}>Snooze</button></div></article>}
-function NarrativeSection({title,items}:{title:string;items:string[]}){return <section><h3>{title}</h3><ul>{items.length?items.map(item=><li key={item}>{item}</li>):<li>No grounded change identified.</li>}</ul></section>}
-export function RenewalWorkspace({baseline,replay}:{baseline:RenewalWorkspaceViewModel;replay:RenewalWorkspaceViewModel}){const[mode,setMode]=useState<RenewalWorkspaceMode>("deterministic-baseline"),[humanState,dispatch]=useReducer(humanWorkflowReducer,{}),[delegations,setDelegations]=useState<Record<string,string>>({}),[feedback,setFeedback]=useState(""),[confirmed,setConfirmed]=useState(false),[realScore,setRealScore]=useState<number>(),[pending,startTransition]=useTransition(),workspace=mode==="artifact-replay"?replay:baseline;useEffect(()=>{try{const saved=localStorage.getItem(renewalIntelligenceConfig.humanStateStorageKey),delegated=localStorage.getItem(renewalIntelligenceConfig.workspaceStateStorageKey);if(saved)dispatch({type:"hydrate",state:JSON.parse(saved) as HumanStateMap});if(delegated)setDelegations(JSON.parse(delegated) as Record<string,string>);}catch{setFeedback("Stored workflow state could not be restored.");}},[]);useEffect(()=>{localStorage.setItem(renewalIntelligenceConfig.humanStateStorageKey,JSON.stringify(humanState));localStorage.setItem(renewalIntelligenceConfig.workspaceStateStorageKey,JSON.stringify(delegations));},[humanState,delegations]);const decisions=useMemo(()=>Object.fromEntries(workspace.plays.map(play=>[play.decisionId,mergeHumanState(play.governedDecision,humanState[play.decisionId])])),[workspace,humanState]);const update=(decision:GovernedDecision,status:DecisionStatus)=>{dispatch({type:"set-status",decision,status,now:new Date().toISOString()});setFeedback(`${decision.title} ${status}.`);},runReal=()=>startTransition(async()=>{const result=await runRealCoinbaseRenewalAction(confirmed);setFeedback(result.success?"Real-provider renewal evaluation completed.":`Real provider blocked at ${result.stage}.`);setRealScore(result.evaluation?.overallScore);});return <article className="renewal-workspace"><nav className="breadcrumbs"><Link href="/accounts">Accounts</Link><span>/</span><Link href={`/accounts/${workspace.accountId}`}>{workspace.accountName}</Link><span>/</span><span>Renewal Intelligence</span></nav><header className="renewal-hero"><div><span className="eyebrow">RENEWAL INTELLIGENCE · {workspace.modeLabel.toUpperCase()}</span><h1>{workspace.accountName} Renewal</h1><p>Proactive, evidence-grounded actions for {workspace.ownerName} · As of {date(workspace.asOf)}</p></div><div className="renewal-mode"><label>Reasoning source<select aria-label="Reasoning source" value={mode} onChange={event=>setMode(event.target.value as RenewalWorkspaceMode)}><option value="deterministic-baseline">Deterministic baseline</option><option value="artifact-replay">Replay artifact</option>{process.env.NODE_ENV!=="production"&&<option value="real-provider">Real provider</option>}</select></label>{mode==="real-provider"&&<><label><input type="checkbox" checked={confirmed} onChange={event=>setConfirmed(event.target.checked)}/> Authorize one development call</label><button disabled={!confirmed||pending} onClick={runReal}>{pending?"Running…":"Run gated provider"}</button></>}</div></header><section className="renewal-summary" aria-label="Renewal executive summary"><div className={`renewal-health health-${workspace.executiveSummary.healthStatus}`}><strong>{workspace.executiveSummary.healthScore}</strong><span>Renewal health</span><small>{pretty(workspace.executiveSummary.healthStatus)} · {pretty(workspace.executiveSummary.riskTrend)}</small></div>{[["ARR",money(workspace.executiveSummary.arr)],["Renewal date",date(workspace.executiveSummary.renewalDate)],["Renewal confidence",`${workspace.executiveSummary.renewalConfidence}%`],["Revenue at risk",money(workspace.executiveSummary.revenueAtRisk)],["AI confidence",`${workspace.executiveSummary.aiConfidence}%`],["Evaluation score",`${realScore??workspace.executiveSummary.evaluationScore}/100`],["Human status",pretty(workspace.executiveSummary.humanStatus)]].map(([label,value])=><div key={label}><small>{label}</small><strong>{value}</strong></div>)}<div className="renewal-top-recommendation"><small>Top recommendation</small><strong>{workspace.executiveSummary.topRecommendation}</strong></div></section><section className="renewal-narrative"><div><span className="eyebrow">AI BRIEFING · THINK FIRST</span><h2>What deserves attention today</h2></div><div><NarrativeSection title="What changed" items={workspace.narrative.whatChanged}/><NarrativeSection title="Biggest risks" items={workspace.narrative.biggestRisks}/><NarrativeSection title="Biggest opportunity" items={workspace.narrative.biggestOpportunity}/><NarrativeSection title="What to do today" items={workspace.narrative.whatToDoToday}/></div></section><section className="renewal-section"><header><div><span className="eyebrow">RANKED SIGNALS</span><h2>Why health changed</h2></div></header><div className="renewal-driver-grid">{workspace.healthDrivers.map(driver=><article key={driver.id}><span>#{driver.rank} · {pretty(driver.trend)}</span><h3>{driver.label}</h3><p>{driver.summary}</p><strong>{driver.businessImpact}</strong><small>{driver.confidence}% confidence · Evidence {driver.evidenceIds.join(", ")||"not yet mapped"}</small></article>)}</div></section><section className="renewal-section"><header><div><span className="eyebrow">QUALIFICATION INTELLIGENCE</span><h2>MEDDPICC · {workspace.meddpicc.coverage}% coverage</h2></div><p>{workspace.meddpicc.decisionConfidence}% decision confidence · {workspace.meddpicc.missingEvidenceCount} evidence gaps</p></header><div className="renewal-meddpicc-grid">{workspace.meddpicc.sections.map(section=><article key={section.key}><header><h3>{section.label}</h3><span>{section.status}</span></header><div className="renewal-coverage"><i style={{width:`${section.coverage}%`}}/></div><p>{section.value}</p><small>{section.coverage}% coverage · {section.confidence}% confidence</small><h4>Missing information</h4><p>{section.missingInformation.join(" · ")||"No material gap"}</p><strong>Next: {section.recommendedAction}</strong><details><summary>Supporting evidence · {section.supportingEvidence.length}</summary><EvidenceList items={section.supportingEvidence}/></details></article>)}</div></section><section className="renewal-section"><header><div><span className="eyebrow">FORWARD SIGNALS</span><h2>Leading indicators</h2></div></header><div className="renewal-indicator-grid">{workspace.leadingIndicators.map(indicator=><article key={indicator.id}><header><h3>{indicator.label}</h3><span className={`indicator-${indicator.direction}`}>{pretty(indicator.direction)}</span></header><strong>{indicator.currentValue}</strong><p>Previous: {indicator.previousValue}</p><small>{indicator.confidence}% confidence · {indicator.evidenceIds.length} evidence references</small><p>{indicator.explanation}</p></article>)}</div></section><section className="renewal-section"><header><div><span className="eyebrow">HUMAN-GOVERNED ACTIONS</span><h2>Recommended plays</h2></div><p>Ranked by Decision Control · Evaluation score shown per play</p></header><div className="renewal-play-list">{workspace.plays.map(play=><PlayCard key={play.id} play={play} decision={decisions[play.decisionId]??play.governedDecision} onStatus={status=>update(decisions[play.decisionId]??play.governedDecision,status)} onEdit={recommendation=>{dispatch({type:"edit",decision:decisions[play.decisionId]??play.governedDecision,recommendation,now:new Date().toISOString()});setFeedback("Recommendation edited and audit state preserved.");}} onDelegate={owner=>{setDelegations(value=>({...value,[play.decisionId]:owner}));setFeedback(`Delegated to ${owner}.`);}}/> )}</div></section><section className="renewal-section renewal-two-column"><div><header><div><span className="eyebrow">ACCOUNT MOTION</span><h2>Renewal timeline</h2></div></header><ol className="renewal-timeline">{workspace.timeline.map(item=><li key={item.id} className={item.upcoming?"upcoming":""}><time>{date(item.timestamp)}</time><div><span>{item.upcoming?"Upcoming":pretty(item.kind)}</span><h3>{item.title}</h3><p>{item.summary}</p><small>{item.source}</small></div></li>)}</ol></div><div><header><div><span className="eyebrow">TRACEABILITY</span><h2>Evidence explorer</h2></div></header><EvidenceList items={workspace.evidence}/></div></section><p className="renewal-feedback" aria-live="polite">{feedback}{Object.keys(delegations).length?` Delegations: ${Object.values(delegations).join(", ")}.`:""}</p></article>}
+import Link from "next/link";
+import { useEffect, useMemo, useReducer, useState, useTransition } from "react";
+import type {
+  DecisionStatus,
+  GovernedDecision,
+} from "@/domain/decisions/types";
+import type {
+  RenewalEvidenceReference,
+  RenewalPlay,
+  RenewalWorkspaceMode,
+  RenewalWorkspaceViewModel,
+} from "@/domain/renewal-intelligence/types";
+import {
+  humanWorkflowReducer,
+  mergeHumanState,
+  type HumanStateMap,
+} from "@/features/morning-briefing/state";
+import { renewalIntelligenceConfig } from "@/renewal-intelligence/config";
+import { runRealCoinbaseRenewalAction } from "@/app/dev/provider-readiness/actions";
+import { currentDemoAsOfLabel } from "@/lib/demo-clock";
+const money = (value: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(value),
+  date = (value: string) =>
+    value ? new Date(value).toLocaleDateString() : "Not scheduled",
+  pretty = (value: string) =>
+    value
+      .replaceAll("-", " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+function EvidenceList({ items }: { items: RenewalEvidenceReference[] }) {
+  return (
+    <div className="renewal-evidence-list">
+      {items.map((item) => (
+        <details key={item.id}>
+          <summary>
+            <span>{item.title}</span>
+            <strong>{Math.round(item.confidence * 100)}%</strong>
+          </summary>
+          <p>{item.summary}</p>
+          <dl>
+            <div>
+              <dt>Source</dt>
+              <dd>{pretty(item.source)}</dd>
+            </div>
+            <div>
+              <dt>Observed</dt>
+              <dd>{date(item.timestamp)}</dd>
+            </div>
+            <div>
+              <dt>Freshness</dt>
+              <dd>{pretty(item.freshness)}</dd>
+            </div>
+            <div>
+              <dt>Evidence ID</dt>
+              <dd>{item.id}</dd>
+            </div>
+            <div>
+              <dt>Fact IDs</dt>
+              <dd>{item.factIds.join(", ") || "None mapped"}</dd>
+            </div>
+            <div>
+              <dt>Lineage</dt>
+              <dd>{item.lineageIds.join(", ") || "No lineage mapped"}</dd>
+            </div>
+            <div>
+              <dt>Conflicts</dt>
+              <dd>{item.conflictIds.join(", ") || "None"}</dd>
+            </div>
+          </dl>
+        </details>
+      ))}
+    </div>
+  );
+}
+function PlayCard({
+  play,
+  decision,
+  onStatus,
+  onEdit,
+  onDelegate,
+}: {
+  play: RenewalPlay;
+  decision: GovernedDecision;
+  onStatus: (status: DecisionStatus) => void;
+  onEdit: (value: string) => void;
+  onDelegate: (owner: string) => void;
+}) {
+  const [editing, setEditing] = useState(false),
+    [draft, setDraft] = useState(decision.recommendedAction),
+    [delegating, setDelegating] = useState(false),
+    [owner, setOwner] = useState("Regional Sales Manager");
+  return (
+    <article className="renewal-play">
+      <header>
+        <span className={`renewal-priority priority-${play.priority}`}>
+          {play.priority} priority
+        </span>
+        <span>{pretty(decision.status)}</span>
+        <span>Evaluation {play.evaluationScore}/100</span>
+      </header>
+      <h3>{play.title}</h3>
+      <p className="renewal-play-action">{decision.recommendedAction}</p>
+      <div className="renewal-play-metrics">
+        <span>
+          <small>Expected impact</small>
+          <strong>{play.expectedImpact}</strong>
+        </span>
+        <span>
+          <small>Revenue protected</small>
+          <strong>{money(play.estimatedRevenueProtected)}</strong>
+        </span>
+        <span>
+          <small>AI confidence</small>
+          <strong>{play.aiConfidence}%</strong>
+        </span>
+        <span>
+          <small>Deadline</small>
+          <strong>{date(play.suggestedDeadline)}</strong>
+        </span>
+      </div>
+      <p>
+        <strong>Owner:</strong> {play.recommendedOwner} ·{" "}
+        <strong>Participants:</strong> {play.requiredParticipants.join(", ")}
+      </p>
+      <details>
+        <summary>Why AROS recommends this</summary>
+        <p>{play.reasoningSummary}</p>
+        <EvidenceList items={play.supportingEvidence} />
+      </details>
+      {editing && (
+        <div className="renewal-inline-form">
+          <textarea
+            aria-label="Edit renewal recommendation"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <button
+            onClick={() => {
+              onEdit(draft);
+              setEditing(false);
+            }}
+          >
+            Save edit
+          </button>
+        </div>
+      )}
+      {delegating && (
+        <div className="renewal-inline-form">
+          <label>
+            Delegate to
+            <input
+              aria-label="Delegate owner"
+              value={owner}
+              onChange={(event) => setOwner(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => {
+              onDelegate(owner);
+              setDelegating(false);
+            }}
+          >
+            Confirm delegate
+          </button>
+        </div>
+      )}
+      <div className="renewal-play-actions">
+        <button onClick={() => onStatus("approved")}>Approve</button>
+        <button onClick={() => setEditing(true)}>Edit</button>
+        <button onClick={() => onStatus("dismissed")}>Reject</button>
+        <button onClick={() => setDelegating(true)}>Delegate</button>
+        <button onClick={() => onStatus("snoozed")}>Snooze</button>
+      </div>
+    </article>
+  );
+}
+function NarrativeSection({
+  title,
+  items,
+}: {
+  title: string;
+  items: string[];
+}) {
+  return (
+    <section>
+      <h3>{title}</h3>
+      <ul>
+        {items.length ? (
+          items.map((item) => <li key={item}>{item}</li>)
+        ) : (
+          <li>No grounded change identified.</li>
+        )}
+      </ul>
+    </section>
+  );
+}
+export function RenewalWorkspace({
+  baseline,
+  replay,
+}: {
+  baseline: RenewalWorkspaceViewModel;
+  replay: RenewalWorkspaceViewModel;
+}) {
+  const [mode, setMode] = useState<RenewalWorkspaceMode>(
+      "deterministic-baseline",
+    ),
+    [humanState, dispatch] = useReducer(humanWorkflowReducer, {}),
+    [delegations, setDelegations] = useState<Record<string, string>>({}),
+    [feedback, setFeedback] = useState(""),
+    [confirmed, setConfirmed] = useState(false),
+    [realScore, setRealScore] = useState<number>(),
+    [pending, startTransition] = useTransition(),
+    workspace = mode === "artifact-replay" ? replay : baseline;
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(
+          renewalIntelligenceConfig.humanStateStorageKey,
+        ),
+        delegated = localStorage.getItem(
+          renewalIntelligenceConfig.workspaceStateStorageKey,
+        );
+      if (saved)
+        dispatch({
+          type: "hydrate",
+          state: JSON.parse(saved) as HumanStateMap,
+        });
+      if (delegated)
+        setDelegations(JSON.parse(delegated) as Record<string, string>);
+    } catch {
+      setFeedback("Stored workflow state could not be restored.");
+    }
+  }, []);
+  useEffect(() => {
+    localStorage.setItem(
+      renewalIntelligenceConfig.humanStateStorageKey,
+      JSON.stringify(humanState),
+    );
+    localStorage.setItem(
+      renewalIntelligenceConfig.workspaceStateStorageKey,
+      JSON.stringify(delegations),
+    );
+  }, [humanState, delegations]);
+  const decisions = useMemo(
+    () =>
+      Object.fromEntries(
+        workspace.plays.map((play) => [
+          play.decisionId,
+          mergeHumanState(play.governedDecision, humanState[play.decisionId]),
+        ]),
+      ),
+    [workspace, humanState],
+  );
+  const update = (decision: GovernedDecision, status: DecisionStatus) => {
+      dispatch({
+        type: "set-status",
+        decision,
+        status,
+        now: new Date().toISOString(),
+      });
+      setFeedback(`${decision.title} ${status}.`);
+    },
+    runReal = () =>
+      startTransition(async () => {
+        const result = await runRealCoinbaseRenewalAction(confirmed);
+        setFeedback(
+          result.success
+            ? "Real-provider renewal evaluation completed."
+            : `Real provider blocked at ${result.stage}.`,
+        );
+        setRealScore(result.evaluation?.overallScore);
+      });
+  return (
+    <article className="renewal-workspace">
+      <nav className="breadcrumbs">
+        <Link href="/accounts">Accounts</Link>
+        <span>/</span>
+        <Link href={`/accounts/${workspace.accountId}`}>
+          {workspace.accountName}
+        </Link>
+        <span>/</span>
+        <span>Renewal Intelligence</span>
+      </nav>
+      <header className="renewal-hero">
+        <div>
+          <span className="eyebrow">
+            RENEWAL INTELLIGENCE · {workspace.modeLabel.toUpperCase()}
+          </span>
+          <h1>{workspace.accountName} Renewal</h1>
+          <p>
+            Proactive, evidence-grounded actions for {workspace.ownerName} · As
+            of {currentDemoAsOfLabel()}
+          </p>
+        </div>
+        <div className="renewal-mode">
+          <label>
+            Reasoning source
+            <select
+              aria-label="Reasoning source"
+              value={mode}
+              onChange={(event) =>
+                setMode(event.target.value as RenewalWorkspaceMode)
+              }
+            >
+              <option value="deterministic-baseline">
+                Deterministic baseline
+              </option>
+              <option value="artifact-replay">Replay artifact</option>
+              {process.env.NODE_ENV !== "production" && (
+                <option value="real-provider">Real provider</option>
+              )}
+            </select>
+          </label>
+          {mode === "real-provider" && (
+            <>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(event) => setConfirmed(event.target.checked)}
+                />{" "}
+                Authorize one development call
+              </label>
+              <button disabled={!confirmed || pending} onClick={runReal}>
+                {pending ? "Running…" : "Run gated provider"}
+              </button>
+            </>
+          )}
+        </div>
+      </header>
+      <section
+        className="renewal-summary"
+        aria-label="Renewal executive summary"
+      >
+        <div
+          className={`renewal-health health-${workspace.executiveSummary.healthStatus}`}
+        >
+          <strong>{workspace.executiveSummary.healthScore}</strong>
+          <span>Renewal health</span>
+          <small>
+            {pretty(workspace.executiveSummary.healthStatus)} ·{" "}
+            {pretty(workspace.executiveSummary.riskTrend)}
+          </small>
+        </div>
+        {[
+          ["ARR", money(workspace.executiveSummary.arr)],
+          ["Renewal date", date(workspace.executiveSummary.renewalDate)],
+          [
+            "Renewal confidence",
+            `${workspace.executiveSummary.renewalConfidence}%`,
+          ],
+          ["Revenue at risk", money(workspace.executiveSummary.revenueAtRisk)],
+          ["AI confidence", `${workspace.executiveSummary.aiConfidence}%`],
+          [
+            "Evaluation score",
+            `${realScore ?? workspace.executiveSummary.evaluationScore}/100`,
+          ],
+          ["Human status", pretty(workspace.executiveSummary.humanStatus)],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <small>{label}</small>
+            <strong>{value}</strong>
+          </div>
+        ))}
+        <div className="renewal-top-recommendation">
+          <small>Top recommendation</small>
+          <strong>{workspace.executiveSummary.topRecommendation}</strong>
+        </div>
+      </section>
+      <section className="renewal-narrative">
+        <div>
+          <span className="eyebrow">AI BRIEFING · THINK FIRST</span>
+          <h2>What deserves attention today</h2>
+        </div>
+        <div>
+          <NarrativeSection
+            title="What changed"
+            items={workspace.narrative.whatChanged}
+          />
+          <NarrativeSection
+            title="Biggest risks"
+            items={workspace.narrative.biggestRisks}
+          />
+          <NarrativeSection
+            title="Biggest opportunity"
+            items={workspace.narrative.biggestOpportunity}
+          />
+          <NarrativeSection
+            title="What to do today"
+            items={workspace.narrative.whatToDoToday}
+          />
+        </div>
+      </section>
+      <section className="renewal-section">
+        <header>
+          <div>
+            <span className="eyebrow">RANKED SIGNALS</span>
+            <h2>Why health changed</h2>
+          </div>
+        </header>
+        <div className="renewal-driver-grid">
+          {workspace.healthDrivers.map((driver) => (
+            <article key={driver.id}>
+              <span>
+                #{driver.rank} · {pretty(driver.trend)}
+              </span>
+              <h3>{driver.label}</h3>
+              <p>{driver.summary}</p>
+              <strong>{driver.businessImpact}</strong>
+              <small>
+                {driver.confidence}% confidence · Evidence{" "}
+                {driver.evidenceIds.join(", ") || "not yet mapped"}
+              </small>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="renewal-section">
+        <header>
+          <div>
+            <span className="eyebrow">QUALIFICATION INTELLIGENCE</span>
+            <h2>MEDDPICC · {workspace.meddpicc.coverage}% coverage</h2>
+          </div>
+          <p>
+            {workspace.meddpicc.decisionConfidence}% decision confidence ·{" "}
+            {workspace.meddpicc.missingEvidenceCount} evidence gaps
+          </p>
+        </header>
+        <div className="renewal-meddpicc-grid">
+          {workspace.meddpicc.sections.map((section) => (
+            <article key={section.key}>
+              <header>
+                <h3>{section.label}</h3>
+                <span>{section.status}</span>
+              </header>
+              <div className="renewal-coverage">
+                <i style={{ width: `${section.coverage}%` }} />
+              </div>
+              <p>{section.value}</p>
+              <small>
+                {section.coverage}% coverage · {section.confidence}% confidence
+              </small>
+              <h4>Missing information</h4>
+              <p>
+                {section.missingInformation.join(" · ") || "No material gap"}
+              </p>
+              <strong>Next: {section.recommendedAction}</strong>
+              <details>
+                <summary>
+                  Supporting evidence · {section.supportingEvidence.length}
+                </summary>
+                <EvidenceList items={section.supportingEvidence} />
+              </details>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="renewal-section">
+        <header>
+          <div>
+            <span className="eyebrow">FORWARD SIGNALS</span>
+            <h2>Leading indicators</h2>
+          </div>
+        </header>
+        <div className="renewal-indicator-grid">
+          {workspace.leadingIndicators.map((indicator) => (
+            <article key={indicator.id}>
+              <header>
+                <h3>{indicator.label}</h3>
+                <span className={`indicator-${indicator.direction}`}>
+                  {pretty(indicator.direction)}
+                </span>
+              </header>
+              <strong>{indicator.currentValue}</strong>
+              <p>Previous: {indicator.previousValue}</p>
+              <small>
+                {indicator.confidence}% confidence ·{" "}
+                {indicator.evidenceIds.length} evidence references
+              </small>
+              <p>{indicator.explanation}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="renewal-section">
+        <header>
+          <div>
+            <span className="eyebrow">HUMAN-GOVERNED ACTIONS</span>
+            <h2>Recommended plays</h2>
+          </div>
+          <p>Ranked by Decision Control · Evaluation score shown per play</p>
+        </header>
+        <div className="renewal-play-list">
+          {workspace.plays.map((play) => (
+            <PlayCard
+              key={play.id}
+              play={play}
+              decision={decisions[play.decisionId] ?? play.governedDecision}
+              onStatus={(status) =>
+                update(
+                  decisions[play.decisionId] ?? play.governedDecision,
+                  status,
+                )
+              }
+              onEdit={(recommendation) => {
+                dispatch({
+                  type: "edit",
+                  decision: decisions[play.decisionId] ?? play.governedDecision,
+                  recommendation,
+                  now: new Date().toISOString(),
+                });
+                setFeedback("Recommendation edited and audit state preserved.");
+              }}
+              onDelegate={(owner) => {
+                setDelegations((value) => ({
+                  ...value,
+                  [play.decisionId]: owner,
+                }));
+                setFeedback(`Delegated to ${owner}.`);
+              }}
+            />
+          ))}
+        </div>
+      </section>
+      <section className="renewal-section renewal-two-column">
+        <div>
+          <header>
+            <div>
+              <span className="eyebrow">ACCOUNT MOTION</span>
+              <h2>Renewal timeline</h2>
+            </div>
+          </header>
+          <ol className="renewal-timeline">
+            {workspace.timeline.map((item) => (
+              <li key={item.id} className={item.upcoming ? "upcoming" : ""}>
+                <time>{date(item.timestamp)}</time>
+                <div>
+                  <span>{item.upcoming ? "Upcoming" : pretty(item.kind)}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.summary}</p>
+                  <small>{item.source}</small>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div>
+          <header>
+            <div>
+              <span className="eyebrow">TRACEABILITY</span>
+              <h2>Evidence explorer</h2>
+            </div>
+          </header>
+          <EvidenceList items={workspace.evidence} />
+        </div>
+      </section>
+      <p className="renewal-feedback" aria-live="polite">
+        {feedback}
+        {Object.keys(delegations).length
+          ? ` Delegations: ${Object.values(delegations).join(", ")}.`
+          : ""}
+      </p>
+    </article>
+  );
+}

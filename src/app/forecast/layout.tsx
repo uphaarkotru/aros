@@ -17,6 +17,10 @@ export default async function ForecastLayout({
       <TodayShell
         role={identity.effectiveRole}
         isViewingAs={identity.isViewingAs}
+        organization={identity.organization.name}
+        scope={identity.scope?.accountIds.length ? `${identity.scope.accountIds.length} accounts in scope` : "Organization scope"}
+        signedInAs={identity.user.displayName}
+        viewingAs={identity.isViewingAs ? identity.viewUser.displayName : undefined}
         activeSection="forecast"
       >
         {children}

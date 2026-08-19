@@ -592,7 +592,7 @@ describe("enterprise foundation acceptance gate", () => {
       );
     expect(event.organizationId).toBe(owner.organizationId);
     expect(event.actorAdminRole).toBe("ORG_OWNER");
-    expect(event.actorRole).toBe("CRO");
+    expect(event.actorRole).toBe("REVOPS");
     expect(event.before).toEqual({ name: "Regional Sales Manager" });
     expect(event.timestamp).toBeTruthy();
   });

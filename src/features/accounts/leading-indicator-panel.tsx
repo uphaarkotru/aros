@@ -1,4 +1,9 @@
+import Link from "next/link";
 import type { LeadingIndicatorRecord } from "@/db/leading-indicator-repository";
+import {
+  aggregateRevenueExecutionSources,
+  revenueExecutionIndicatorDefinition,
+} from "@/revenue-execution-indicators/domain";
 
 export function LeadingIndicatorPanel({
   indicators,
@@ -18,6 +23,24 @@ export function LeadingIndicatorPanel({
     occurred_at: string;
   }>;
 }) {
+  const canonical = indicators.length
+    ? aggregateRevenueExecutionSources({
+        organizationId: indicators[0].organization_id,
+        accountId: indicators[0].account_id ?? undefined,
+        sources: indicators.map((indicator) => ({
+          id: indicator.id,
+          indicatorType: indicator.indicator_type,
+          score: indicator.score,
+          status: indicator.status,
+          rationale: indicator.rationale,
+          evidence: indicator.evidence,
+          observedAt: indicator.observed_at,
+          accountId: indicator.account_id ?? undefined,
+          opportunityId: indicator.opportunity_id ?? undefined,
+        })),
+      })
+    : [];
+  const accountId = indicators[0]?.account_id ?? undefined;
   return (
     <section className="twin-card twin-wide leading-indicator-panel">
       <div className="twin-section-head">
@@ -33,28 +56,52 @@ export function LeadingIndicatorPanel({
         </div>
       </div>
       {indicators.length ? (
-        <div className="leading-indicator-grid">
-          {indicators.map((indicator) => (
-            <article
-              className={`leading-indicator leading-${indicator.status.toLowerCase()}`}
-              key={indicator.id}
-            >
-              <div>
-                <span>{indicator.indicator_type.replaceAll("_", " ")}</span>
-                <strong>{indicator.status.replaceAll("_", " ")}</strong>
-              </div>
-              <p>{indicator.rationale}</p>
-              <ul>
-                {indicator.evidence.slice(0, 3).map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      ) : (
+        <>
+          <div className="canonical-indicator-grid">
+            {canonical.map((indicator) => (
+              <Link
+                className={`canonical-indicator canonical-${indicator.status.toLowerCase()}`}
+                href={`/today/revenue-execution/${indicator.indicatorType}${accountId ? `?accountId=${encodeURIComponent(accountId)}` : ""}`}
+                key={indicator.indicatorType}
+                title="Open indicator details"
+              >
+                <div>
+                  <span>
+                    {
+                      revenueExecutionIndicatorDefinition(
+                        indicator.indicatorType,
+                      ).label
+                    }
+                  </span>
+                  <strong>{indicator.score ?? "—"}</strong>
+                </div>
+                <small>
+                  {indicator.status.replaceAll("_", " ")} · {indicator.trend}
+                </small>
+                <p>{indicator.rationale}</p>
+                {indicator.evidence.length ? (
+                  <ul className="canonical-evidence">
+                    {indicator.evidence.slice(0, 3).map((item) => (
+                      <li key={`${item.sourceId ?? "evidence"}-${item.text}`}>
+                        {item.text}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <small>
+                  <strong>Benchmark:</strong> {indicator.benchmark}
+                </small>
+                <small>
+                  <strong>Next:</strong> {indicator.recommendedNextAction}
+                </small>
+              </Link>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {!indicators.length ? (
         <p>No leading-indicator evidence is available for this account.</p>
-      )}
+      ) : null}
       {coachingInsights.length ? (
         <div className="coaching-insights">
           <h3>Suggested coaching</h3>

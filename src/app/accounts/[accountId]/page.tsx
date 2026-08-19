@@ -77,7 +77,10 @@ export default async function AccountPage({
           })
         : [];
   return (
-    <ApplicationShell active="accounts">
+    <ApplicationShell
+      active="accounts"
+      role={identity.effectiveRole ?? undefined}
+    >
       <ReconciledAccountDetail
         twin={twin.state as unknown as AccountDigitalTwin}
         leadingIndicators={leadingIndicators}

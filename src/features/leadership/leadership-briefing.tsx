@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { RevenueExecutionIndicator } from "@/revenue-execution-indicators/domain";
+import { RevenueExecutionHealthStrip } from "@/features/morning-briefing/morning-briefing-dashboard";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -61,6 +63,7 @@ export interface LeadershipBrief {
     seller_count: number;
     insight_count: number;
   }>;
+  executionIndicators?: RevenueExecutionIndicator[];
 }
 
 export function LeadershipBriefing({
@@ -116,6 +119,15 @@ export function LeadershipBriefing({
         </article>
       </section>
 
+      <RevenueExecutionHealthStrip
+        indicators={brief.executionIndicators ?? []}
+        title={
+          isCro
+            ? "My organizational revenue execution health"
+            : "My regional revenue execution health"
+        }
+        scopeLabel={isCro ? "the organization" : "your region"}
+      />
       <section className="leadership-section">
         <header>
           <div>

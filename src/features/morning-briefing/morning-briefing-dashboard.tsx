@@ -8,7 +8,7 @@ import type {
   DecisionStatus,
   GovernedDecision,
 } from "@/domain/decisions/types";
-import { agentStatuses, decisionControlResult, morningMetrics } from "./data";
+import { decisionControlResult } from "./data";
 import {
   activeDecisions,
   decisionQueue,
@@ -18,19 +18,14 @@ import {
 import { humanWorkflowReducer, mergeHumanState } from "./state";
 import type { Tone } from "./types";
 import { useOptionalSession } from "@/auth/session-context";
-import type { LeadingIndicatorRecord } from "@/db/leading-indicator-repository";
+import {
+  revenueExecutionIndicatorDefinition,
+  summarizeRevenueExecutionHealth,
+  type RevenueExecutionIndicator,
+} from "@/revenue-execution-indicators/domain";
+import { aeNavigation } from "@/components/navigation-config";
 
-const navItems = [
-  "AI Command Center",
-  "AI Workforce",
-  "Accounts",
-  "Cadences",
-  "Decisions",
-  "Signals",
-  "Forecast",
-  "Executive",
-  "Settings",
-];
+const navItems = [{ label: "Today", href: "/today" }, ...aeNavigation];
 const now = () => new Date().toISOString();
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -81,32 +76,20 @@ function AppSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           <small>AROS · AUTONOMOUS REVENUE OS</small>
         </div>
         <nav>
-          {navItems.map((item, index) =>
-            item === "Accounts" || item === "Cadences" ? (
-              <Link
-                key={item}
-                className="nav-item"
-                href={item === "Accounts" ? "/accounts" : "/cadences"}
-              >
-                <span className="glyph" aria-hidden="true">
-                  {item === "Accounts" ? "▣" : "◫"}
-                </span>
-                {item}
-              </Link>
-            ) : (
-              <button
-                key={item}
-                className={`nav-item ${index === 0 ? "active" : ""}`}
-                aria-current={index === 0 ? "page" : undefined}
-                onClick={index === 0 ? onClose : undefined}
-              >
-                <span className="glyph" aria-hidden="true">
-                  {["⌁", "✣", "▣", "◫", "◇", "⌁", "↗", "◎", "⚙"][index]}
-                </span>
-                {item}
-              </button>
-            ),
-          )}
+          {navItems.map((item, index) => (
+            <Link
+              key={item.label}
+              className={`nav-item ${index === 0 ? "active" : ""}`}
+              aria-current={index === 0 ? "page" : undefined}
+              href={item.href}
+              onClick={index === 0 ? onClose : undefined}
+            >
+              <span className="glyph" aria-hidden="true">
+                {["⌁", "▣", "◇", "◫", "⚙"][index]}
+              </span>
+              {item.label}
+            </Link>
+          ))}
         </nav>
         <div className="system-status">
           <span>
@@ -151,7 +134,9 @@ function PageHeader({
         </button>
         <div>
           <h1>Good Morning, {parts[0]}</h1>
-          <p>Your AI workforce analyzed the revenue organization overnight.</p>
+          <p>
+            Revenue intelligence prepared your latest signals and decisions.
+          </p>
         </div>
         <div className="avatar" aria-label={`${userName} profile`}>
           {initials}
@@ -169,15 +154,6 @@ function PageHeader({
         <small>Open the evidence-grounded action plan →</small>
       </Link>
     </>
-  );
-}
-function MetricCard({ metric }: { metric: (typeof morningMetrics)[number] }) {
-  return (
-    <article className="metric-card" tabIndex={0}>
-      <p>{metric.label}</p>
-      <strong>{metric.value}</strong>
-      <StatusPill tone={metric.tone}>{metric.indicator}</StatusPill>
-    </article>
   );
 }
 
@@ -587,39 +563,6 @@ function QueueCard({
     </section>
   );
 }
-function WorkforceCard() {
-  return (
-    <section className="panel workforce-card">
-      <div className="section-heading">
-        <div>
-          <h2>AI Workforce</h2>
-          <p>Autonomous agents · Live</p>
-        </div>
-        <span className="workforce-live">
-          <i />
-        </span>
-      </div>
-      <div>
-        {agentStatuses.map((agent) => (
-          <div className="agent-row" key={agent.id}>
-            <span className={`agent-icon agent-${agent.status.toLowerCase()}`}>
-              ✦
-            </span>
-            <div>
-              <strong>{agent.name}</strong>
-              <small>{agent.detail}</small>
-            </div>
-            <StatusPill
-              tone={agent.status === "Processing" ? "amber" : "green"}
-            >
-              {agent.status}
-            </StatusPill>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 function DecisionItem({
   decision,
   onOpen,
@@ -714,6 +657,8 @@ export interface AssignedAccountSummary {
   name: string;
   segment: string | null;
   status: string;
+  healthScore?: number | null;
+  healthStatus?: RevenueExecutionIndicator["status"];
 }
 export interface CadenceSummary {
   id: string;
@@ -797,59 +742,91 @@ function UpcomingCadences({ cadences }: { cadences: CadenceSummary[] }) {
   );
 }
 
-function LeadingIndicatorHealth({
+export function RevenueExecutionHealthStrip({
   indicators,
-  coachingInsights,
+  title = "My revenue execution health",
+  scopeLabel = "your territory",
+  accountId,
+  instanceId,
 }: {
-  indicators: LeadingIndicatorRecord[];
-  coachingInsights: Array<{
-    id: string;
-    title: string;
-    insight: string;
-    suggested_action: string;
-  }>;
+  indicators: RevenueExecutionIndicator[];
+  title?: string;
+  scopeLabel?: string;
+  accountId?: string;
+  instanceId?: string;
 }) {
+  if (!indicators.length) return null;
+  const primary = indicators.find(
+    (item) => item.status === "AT_RISK" || item.status === "CRITICAL",
+  );
+  const titleId = `revenue-execution-title-${accountId ?? instanceId ?? "territory"}`;
+  const overallHealth = summarizeRevenueExecutionHealth(indicators);
+  const overallLabel = accountId
+    ? "Overall account health"
+    : "Overall territory health";
   return (
     <section
-      className="panel leading-health"
-      aria-labelledby="leading-health-title"
+      className="revenue-execution-panel panel"
+      aria-labelledby={titleId}
     >
       <div className="section-heading">
         <div>
-          <h2 id="leading-health-title">Revenue execution health</h2>
+          <h2 id={titleId}>{title}</h2>
           <p>
-            Leading evidence behind your opportunities, not activity counts.
+            Five leading indicators consolidated across {scopeLabel}. Open any
+            indicator for evidence, benchmarks, and focused actions.
           </p>
         </div>
-        <span className="analysis-label">
-          <i /> Evidence grounded
-        </span>
+        <div className="revenue-execution-heading-meta">
+          <div className="revenue-execution-overall">
+            <span>{overallLabel}</span>
+            <strong
+              className={`revenue-execution-overall-score health-${overallHealth.status.toLowerCase()}`}
+            >
+              {overallHealth.score ?? "—"}
+            </strong>
+          </div>
+          <span className="analysis-label">
+            <i /> Explainable evidence
+          </span>
+        </div>
       </div>
-      {indicators.length ? (
-        <div className="leading-health-list">
-          {indicators.slice(0, 8).map((indicator) => (
-            <article key={indicator.id}>
-              <div>
-                <span>{indicator.indicator_type.replaceAll("_", " ")}</span>
-                <strong>{indicator.status.replaceAll("_", " ")}</strong>
-              </div>
-              <p>{indicator.rationale}</p>
-              <small>{indicator.evidence.slice(0, 2).join(" · ")}</small>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <div className="feed-state">
-          <strong>No leading-indicator evidence yet</strong>
-          <p>AROS will show evidence as the revenue motion develops.</p>
-        </div>
-      )}
-      {coachingInsights.length ? (
-        <div className="leading-coaching">
-          <strong>Suggested next action</strong>
-          <p>{coachingInsights[0].suggested_action}</p>
-        </div>
-      ) : null}
+      <div className="revenue-execution-strip">
+        {indicators.map((indicator) => {
+          const definition = revenueExecutionIndicatorDefinition(
+            indicator.indicatorType,
+          );
+          return (
+            <Link
+              aria-label={`Open ${definition.label} details`}
+              className={`revenue-execution-card canonical-${indicator.status.toLowerCase()}`}
+              href={`/today/revenue-execution/${indicator.indicatorType}${accountId ? `?accountId=${encodeURIComponent(accountId)}` : ""}`}
+              key={indicator.indicatorType}
+              title={indicator.rationale}
+            >
+              <span>{definition.label}</span>
+              <strong>{indicator.score ?? "—"}</strong>
+              <small className={`execution-${indicator.status.toLowerCase()}`}>
+                {indicator.status.replaceAll("_", " ")}{" "}
+                {indicator.trend === "DETERIORATING"
+                  ? "↓"
+                  : indicator.trend === "IMPROVING"
+                    ? "↑"
+                    : "→"}
+              </small>
+              <p>{indicator.evidence[0]?.text ?? indicator.implication}</p>
+              <b>View details →</b>
+            </Link>
+          );
+        })}
+      </div>
+      <div className="primary-coaching-insight">
+        <strong>AROS primary coaching insight</strong>
+        <p>
+          {primary?.recommendedNextAction ??
+            "Execution conditions are healthy; keep the next customer-confirmed milestone visible."}
+        </p>
+      </div>
     </section>
   );
 }
@@ -858,19 +835,16 @@ export function MorningBriefingDashboard({
   initialDecisions,
   assignedAccounts = [],
   cadences = [],
-  leadingIndicators = [],
-  coachingInsights = [],
+  executionIndicators = [],
+  executionIndicatorsTitle = "My revenue execution health",
+  embedded = false,
 }: {
   initialDecisions: GovernedDecision[];
   assignedAccounts?: AssignedAccountSummary[];
   cadences?: CadenceSummary[];
-  leadingIndicators?: LeadingIndicatorRecord[];
-  coachingInsights?: Array<{
-    id: string;
-    title: string;
-    insight: string;
-    suggested_action: string;
-  }>;
+  executionIndicators?: RevenueExecutionIndicator[];
+  executionIndicatorsTitle?: string;
+  embedded?: boolean;
 }) {
   const [humanState, dispatch] = useReducer(humanWorkflowReducer, {});
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -926,15 +900,14 @@ export function MorningBriefingDashboard({
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("diagnostics") === "1";
   return (
-    <div className="app-shell">
-      <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="main-content">
+    <div className={`app-shell ${embedded ? "embedded-app-shell" : ""}`}>
+      {!embedded && (
+        <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      )}
+      <main
+        className={`main-content ${embedded ? "embedded-main-content" : ""}`}
+      >
         <PageHeader onMenu={() => setSidebarOpen(true)} decisions={decisions} />
-        <section className="metrics-grid" aria-label="Morning metrics">
-          {morningMetrics.map((metric) => (
-            <MetricCard key={metric.id} metric={metric} />
-          ))}
-        </section>
         <section
           className="assigned-accounts panel"
           aria-labelledby="assigned-accounts-title"
@@ -952,11 +925,12 @@ export function MorningBriefingDashboard({
                 <Link href={`/accounts/${account.id}`} key={account.id}>
                   <strong>{account.name}</strong>
                   <span>{account.segment ?? "Enterprise"}</span>
-                  <StatusPill
-                    tone={account.status === "ACTIVE" ? "green" : "slate"}
+                  <span
+                    className={`assigned-account-health health-${(account.healthStatus ?? "UNKNOWN").toLowerCase()}`}
+                    aria-label={`Health score ${account.healthScore ?? "unknown"}`}
                   >
-                    {label(account.status.toLowerCase())}
-                  </StatusPill>
+                    {account.healthScore ?? "—"}
+                  </span>
                 </Link>
               ))}
             </div>
@@ -966,17 +940,16 @@ export function MorningBriefingDashboard({
             </p>
           )}
         </section>
-        <LeadingIndicatorHealth
-          indicators={leadingIndicators}
-          coachingInsights={coachingInsights}
-        />
         <div className="dashboard-grid">
           <IntelligenceFeed decisions={feed} onSelect={setSelectedId} />
           <aside className="right-rail">
             <QueueCard metrics={metrics} onOpen={() => setQueueOpen(true)} />
-            <WorkforceCard />
           </aside>
         </div>
+        <RevenueExecutionHealthStrip
+          indicators={executionIndicators}
+          title={executionIndicatorsTitle}
+        />
         <UpcomingCadences cadences={cadences} />
         {activeDecisions(decisions).length === 0 && (
           <div className="feed-state">

@@ -5,6 +5,7 @@ import {
   rollUpForecast,
   type ForecastCategory,
 } from "@/forecast/domain";
+import { aggregateRevenueExecutionSources } from "@/revenue-execution-indicators/domain";
 
 export class LeadershipConflictError extends Error {}
 
@@ -322,6 +323,12 @@ export class PostgresLeadershipRepository {
           `${scopeCte} SELECT li.indicator_type,count(DISTINCT ci.membership_id)::int seller_count,count(*)::int insight_count FROM coaching_insights ci JOIN leading_indicators li ON(li.organization_id=ci.organization_id AND li.id=ci.source_indicator_id) WHERE ci.organization_id=$1 AND (ci.opportunity_id IN(SELECT id FROM scoped_opportunities) OR ci.account_id IN(SELECT account_id FROM opportunities WHERE organization_id=$1 AND id IN(SELECT id FROM scoped_opportunities))) GROUP BY li.indicator_type ORDER BY insight_count DESC`,
           [organizationId, leaderMembershipId],
         )
+      ).rows,
+      executionSources = (
+        await this.pool.query(
+          `${scopeCte} SELECT li.id,li.account_id,li.opportunity_id,li.indicator_type,li.score,li.status,li.rationale,li.evidence,li.observed_at FROM leading_indicators li WHERE li.organization_id=$1 AND (li.opportunity_id IN(SELECT id FROM scoped_opportunities) OR li.account_id IN(SELECT account_id FROM opportunities WHERE organization_id=$1 AND id IN(SELECT id FROM scoped_opportunities)))`,
+          [organizationId, leaderMembershipId],
+        )
       ).rows;
     const rollup = rollUpForecast(
       assessments.map((item) => ({
@@ -341,6 +348,20 @@ export class PostgresLeadershipRepository {
       operating,
       managerHealth,
       coachingThemes,
+      executionIndicators: aggregateRevenueExecutionSources({
+        organizationId,
+        sources: executionSources.map((item) => ({
+          id: item.id,
+          indicatorType: item.indicator_type,
+          score: item.score,
+          status: item.status,
+          rationale: item.rationale,
+          evidence: item.evidence ?? [],
+          observedAt: item.observed_at,
+          accountId: item.account_id ?? undefined,
+          opportunityId: item.opportunity_id ?? undefined,
+        })),
+      }),
       rollup,
     };
   }

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { MorningBriefingDashboard as PersistedDashboard } from "./morning-briefing-dashboard";
 import { governedDecisions } from "./data";
+import { deriveRevenueExecutionIndicators } from "@/revenue-execution-indicators/domain";
 const MorningBriefingDashboard = () => (
   <PersistedDashboard initialDecisions={governedDecisions} />
 );
@@ -19,6 +20,47 @@ async function openCoinbase() {
 }
 
 describe("MorningBriefingDashboard", () => {
+  it("merges leading indicators into five clickable execution-health highlights", () => {
+    const executionIndicators = deriveRevenueExecutionIndicators({
+      organizationId: "org-cognivit-demo",
+      sources: [
+        {
+          id: "executive",
+          indicatorType: "EXECUTIVE_ENGAGEMENT",
+          score: 42,
+          status: "AT_RISK",
+          rationale: "Executive engagement is stale.",
+          evidence: ["No executive interaction in 45 days"],
+          observedAt: "2026-08-18T16:00:00.000Z",
+        },
+      ],
+    });
+    render(
+      <PersistedDashboard
+        initialDecisions={governedDecisions}
+        executionIndicators={executionIndicators}
+      />,
+    );
+    const section = screen.getByRole("region", {
+      name: "My revenue execution health",
+    });
+    expect(within(section).getAllByRole("link")).toHaveLength(5);
+    expect(
+      within(section).getByRole("link", {
+        name: "Open Executive access details",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/today/revenue-execution/EXECUTIVE_ECONOMIC_BUYER_ENGAGEMENT",
+    );
+    expect(
+      within(section).getByText("No executive interaction in 45 days"),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Leading indicator evidence" }),
+    ).toBeNull();
+  });
+
   it("ranks the persisted security review risk ahead of the 2x2 approval", () => {
     const decisions = [
       {
@@ -113,11 +155,14 @@ describe("MorningBriefingDashboard", () => {
     ).toBeTruthy();
   });
 
-  it("renders the five metric cards", () => {
+  it("prioritizes intelligence over activity metrics", () => {
     render(<MorningBriefingDashboard />);
-    const metrics = screen.getByRole("region", { name: /morning metrics/i });
-    expect(within(metrics).getAllByRole("article")).toHaveLength(5);
-    expect(within(metrics).getByText("Signals Processed")).toBeVisible();
+    expect(
+      screen.queryByRole("region", { name: /morning metrics/i }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "AI Intelligence Feed" }),
+    ).toBeVisible();
   });
 
   it("renders three intelligence items", () => {

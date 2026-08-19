@@ -65,6 +65,20 @@ export class DemoScenarioRepository {
           state,
         ],
       );
+      const twin = (await client.query<{ id: string }>(
+        `SELECT id FROM revenue_digital_twins WHERE organization_id=$1 AND account_id='acct-coinbase' LIMIT 1`,
+        [organizationId],
+      )).rows[0];
+      if (twin)
+        await client.query(
+          `INSERT INTO revenue_digital_twin_events(id,organization_id,revenue_digital_twin_id,event_type,payload,occurred_at,created_at) VALUES($1,$2,$3,'DEMO_SCENARIO_STATE_CHANGED',$4,now(),now()) ON CONFLICT(id) DO NOTHING`,
+          [
+            `twin-event-demo-state-${organizationId}-${result.rows[0].version}`,
+            organizationId,
+            twin.id,
+            JSON.stringify({ scenarioKey: COINBASE_SCENARIO, state, version: result.rows[0].version }),
+          ],
+        );
       return result.rows[0];
     });
   }

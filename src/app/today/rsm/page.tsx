@@ -1,4 +1,3 @@
-import "./rsm.css";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireIdentity } from "@/auth/guards.server";
@@ -6,6 +5,15 @@ import { cadenceRepository } from "@/db/cadence-repository";
 import { DecisionApprove } from "./decision-approve";
 import { identityRepository } from "@/auth/repository.server";
 import { getMembership } from "@/auth/tenant-model";
+import { query } from "@/db/client";
+import {
+  EvidencePanel,
+  RevenueImpactBadge,
+  RiskIndicator,
+} from "@/components/revenue-operating";
+import { leadingIndicatorRepository } from "@/db/leading-indicator-repository";
+import { aggregateRevenueExecutionSources } from "@/revenue-execution-indicators/domain";
+import { RevenueExecutionHealthStrip } from "@/features/morning-briefing/morning-briefing-dashboard";
 const money = (value: number | null) =>
   value
     ? new Intl.NumberFormat("en-US", {
@@ -41,6 +49,65 @@ export default async function Page() {
       (sum, item) => sum + Number(item.amount ?? 0),
       0,
     );
+  const scopedIndicators =
+    leadingIndicatorRepository && effectiveMembership
+      ? await leadingIndicatorRepository.listForViewer({
+          organizationId: identity.organization.id,
+          membershipId: effectiveMembership.id,
+        })
+      : [];
+  const ownership = await query(
+    `SELECT id,account_id,owner_membership_id FROM opportunities WHERE organization_id=$1`,
+    [identity.organization.id],
+  );
+  const ownerByOpportunity = new Map<string, string>();
+  const ownersByAccount = new Map<string, string[]>();
+  for (const opportunity of ownership.rows) {
+    if (opportunity.owner_membership_id)
+      ownerByOpportunity.set(opportunity.id, opportunity.owner_membership_id);
+    if (opportunity.owner_membership_id) {
+      const owners = ownersByAccount.get(opportunity.account_id) ?? [];
+      if (!owners.includes(opportunity.owner_membership_id))
+        owners.push(opportunity.owner_membership_id);
+      ownersByAccount.set(opportunity.account_id, owners);
+    }
+  }
+  const directReportMemberships = new Set(
+    brief.reports.map((report) => report.membership_id),
+  );
+  const executionByAe = brief.reports.map((report) => {
+    const sources = scopedIndicators
+      .filter((indicator) => {
+        const ownerMembership =
+          (indicator.membership_id &&
+            directReportMemberships.has(indicator.membership_id) &&
+            indicator.membership_id) ||
+          (indicator.opportunity_id &&
+            ownerByOpportunity.get(indicator.opportunity_id)) ||
+          (indicator.account_id &&
+            ownersByAccount.get(indicator.account_id)?.[0]);
+        return ownerMembership === report.membership_id;
+      })
+      .map((indicator) => ({
+        id: indicator.id,
+        indicatorType: indicator.indicator_type,
+        score: indicator.score,
+        status: indicator.status,
+        rationale: indicator.rationale,
+        evidence: indicator.evidence,
+        observedAt: indicator.observed_at,
+        accountId: indicator.account_id ?? undefined,
+        opportunityId: indicator.opportunity_id ?? undefined,
+      }));
+    return {
+      report,
+      indicators: aggregateRevenueExecutionSources({
+        organizationId: identity.organization.id,
+        membershipId: report.membership_id,
+        sources,
+      }),
+    };
+  });
   return (
     <main className="rsm-today">
       <header className="rsm-hero">
@@ -81,20 +148,23 @@ export default async function Page() {
                 <span>priority</span>
               </div>
               <div>
-                <span
-                  className={`severity severity-${String(item.severity).toLowerCase()}`}
+                <RiskIndicator
+                  level={
+                    String(item.severity).toLowerCase() === "critical"
+                      ? "critical"
+                      : String(item.severity).toLowerCase() === "high"
+                        ? "high"
+                        : "medium"
+                  }
                 >
                   {item.severity}
-                </span>
+                </RiskIndicator>
                 <h3>
                   {item.account_name} · {money(item.amount)}
                 </h3>
+                <RevenueImpactBadge value={Number(item.amount ?? 0)} />
                 <p>{item.summary}</p>
-                <ul>
-                  {(item.evidence ?? []).slice(0, 4).map((e: string) => (
-                    <li key={e}>{e}</li>
-                  ))}
-                </ul>
+                <EvidencePanel evidence={item.evidence ?? []} />
                 <strong className="recommended">
                   Recommended · {item.recommended_action}
                 </strong>
@@ -199,6 +269,25 @@ export default async function Page() {
         ) : (
           <p className="empty-brief">No coaching themes require attention.</p>
         )}
+      </section>
+      <section className="rsm-section rsm-ae-health-section">
+        <h2>Revenue execution health by AE</h2>
+        <p className="section-note">
+          Five leading indicators for each AE under your management, with the
+          same evidence and action model used across the revenue operating
+          experience.
+        </p>
+        <div className="rsm-ae-health-list">
+          {executionByAe.map(({ report, indicators }) => (
+            <RevenueExecutionHealthStrip
+              indicators={indicators}
+              title={`${report.display_name}'s revenue execution health`}
+              scopeLabel="their accounts"
+              instanceId={report.membership_id}
+              key={report.membership_id}
+            />
+          ))}
+        </div>
       </section>
     </main>
   );

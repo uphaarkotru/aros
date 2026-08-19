@@ -6,6 +6,11 @@ import type {
   IndicatorType,
 } from "@/leading-indicators/domain";
 import { coachingForIndicator } from "@/leading-indicators/domain";
+import {
+  deriveRevenueExecutionIndicators,
+  revenueExecutionIndicatorDefinition,
+  type RevenueExecutionIndicatorType,
+} from "@/revenue-execution-indicators/domain";
 
 export type LeadingIndicatorRecord = {
   id: string;
@@ -168,6 +173,27 @@ export class PostgresLeadingIndicatorRepository {
               indicatorType: row.indicator_type,
               status: row.status,
               evidence: input.evidence,
+              canonicalIndicators: deriveRevenueExecutionIndicators({
+                organizationId: input.organizationId,
+                accountId: row.account_id ?? accountId,
+                opportunityId: row.opportunity_id ?? undefined,
+                sources: [
+                  {
+                    id: row.id,
+                    indicatorType: row.indicator_type,
+                    score: row.score,
+                    status: row.status,
+                    rationale: row.rationale,
+                    evidence: input.evidence,
+                    observedAt: input.observedAt,
+                  },
+                ],
+              }).map((indicator) => ({
+                indicatorType: indicator.indicatorType,
+                score: indicator.score,
+                status: indicator.status,
+                trend: indicator.trend,
+              })),
             }),
             input.observedAt,
           ],
@@ -263,6 +289,32 @@ export class PostgresLeadingIndicatorRepository {
       ],
     );
     return rows as LeadingIndicatorRecord[];
+  }
+
+  async getOrganizationCohortBenchmark(input: {
+    organizationId: string;
+    indicatorType: RevenueExecutionIndicatorType;
+  }) {
+    const sourceTypes = revenueExecutionIndicatorDefinition(
+      input.indicatorType,
+    ).sourceTypes;
+    const { rows } = await this.pool.query(
+      `WITH motion_scores AS (
+        SELECT concat(
+          CASE WHEN opportunity_id IS NOT NULL THEN 'opportunity:' ELSE CASE WHEN account_id IS NOT NULL THEN 'account:' ELSE 'membership:' END END,
+          coalesce(opportunity_id,account_id,membership_id)
+        ) motion_id,avg(score)::float8 score
+        FROM leading_indicators
+        WHERE organization_id=$1 AND indicator_type=ANY($2::text[]) AND score IS NOT NULL
+        GROUP BY motion_id
+      )
+      SELECT round(avg(score))::int score,count(*)::int cohort_size FROM motion_scores`,
+      [input.organizationId, sourceTypes],
+    );
+    return {
+      score: (rows[0]?.score as number | null | undefined) ?? null,
+      cohortSize: Number(rows[0]?.cohort_size ?? 0),
+    };
   }
 
   async listCoachingInsights(input: ViewerInput) {

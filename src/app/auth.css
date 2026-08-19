@@ -116,6 +116,7 @@
 }
 .role-main {
   min-width: 0;
+  color: #172033;
 }
 .role-header {
   min-height: 74px;
@@ -129,7 +130,25 @@
 .identity-controls {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
   gap: 12px;
+}
+.simulation-controls,
+.signed-in-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.simulation-controls {
+  min-width: 0;
+}
+.signed-in-controls {
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+.simulation-identity small {
+  color: #2563eb;
 }
 .identity-controls label {
   display: flex;
@@ -273,10 +292,259 @@
   }
 }
 .admin-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: #2563eb;
+  cursor: pointer;
   font-size: 11px;
   font-weight: 750;
   text-decoration: none;
+}
+
+.role-context-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin: 22px 28px 0;
+  padding: 14px 16px;
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.role-context-header > div:first-child,
+.role-context-identity,
+.role-context-identity span {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.role-context-header > div:first-child {
+  flex-wrap: wrap;
+}
+.role-context-header strong {
+  color: #172033;
+  font-size: 12px;
+}
+.role-context-header small {
+  color: #64748b;
+  font-size: 10px;
+}
+.role-context-identity {
+  justify-content: flex-end;
+}
+.role-context-identity span {
+  display: grid;
+  gap: 2px;
+  color: #172033;
+  font-size: 11px;
+  font-weight: 750;
+}
+.role-context-identity span + span {
+  border-left: 1px solid #cbd5e1;
+  padding-left: 10px;
+}
+.priority-card,
+.cadence-agenda {
+  border: 1px solid #dbe3ec;
+  border-radius: 14px;
+  padding: 18px;
+  background: #fff;
+}
+.priority-card-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.operating-stage,
+.priority-status,
+.revenue-impact-badge,
+.risk-indicator {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.operating-stage {
+  background: #ebf2ff;
+  color: #2961ed;
+  text-transform: uppercase;
+}
+.priority-status {
+  background: #f1f5f9;
+  color: #475569;
+}
+.revenue-impact-badge {
+  background: #fff4d6;
+  color: #8a5200;
+}
+.priority-card h3 {
+  margin: 12px 0 4px;
+}
+.priority-card p {
+  margin: 6px 0;
+  color: #475569;
+}
+.priority-context,
+.priority-owner {
+  font-size: 12px;
+  font-weight: 700;
+}
+.priority-owner {
+  color: #64748b !important;
+}
+.evidence-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f6f8fb;
+  color: #475569;
+}
+.evidence-panel strong,
+.evidence-panel small {
+  display: block;
+}
+.evidence-panel small {
+  margin-top: 3px;
+  color: #64748b;
+}
+.evidence-panel ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.evidence-panel p {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.action-panel {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.action-row-card > div {
+  min-width: 0;
+}
+.action-row-card .action-panel {
+  margin-top: 10px;
+}
+.action-row-card .action-panel p {
+  margin: 5px 0 0;
+  color: #475569;
+  font-size: 11px;
+}
+.cadence-agenda {
+  margin: 18px 28px;
+}
+.cadence-agenda header {
+  display: flex;
+  justify-content: space-between;
+}
+.cadence-agenda h2 {
+  margin: 5px 0;
+}
+.cadence-agenda header p {
+  margin: 0;
+  color: #64748b;
+}
+.cadence-agenda > article {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #edf1f5;
+}
+.cadence-agenda > article h3 {
+  margin: 0 0 6px;
+}
+.risk-low {
+  color: #067647;
+  background: #e9f8ef;
+}
+.risk-medium {
+  color: #8a5200;
+  background: #fff4d6;
+}
+.risk-high,
+.risk-critical {
+  color: #b42318;
+  background: #fff0f0;
+}
+.operating-timeline {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+}
+.operating-timeline > li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 18px;
+  padding: 16px 0;
+  border-top: 1px solid #edf1f5;
+}
+.operating-timeline time {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+  padding-top: 4px;
+}
+.timeline-event {
+  position: relative;
+  padding-left: 18px;
+  border-left: 3px solid #dbe3ec;
+}
+.timeline-event h3 {
+  margin: 8px 0 4px;
+}
+.timeline-event p {
+  margin: 0 0 6px;
+  color: #475569;
+}
+.timeline-event small {
+  display: block;
+  color: #64748b;
+  margin-top: 3px;
+}
+/* Dark operating pages contain shared light cards. Keep shared card text
+   readable instead of inheriting the dark-page foreground color. */
+.rsm-today .priority-card,
+.rsm-today .cadence-agenda,
+.rsm-today .priority-card h2,
+.rsm-today .priority-card h3,
+.rsm-today .cadence-agenda h2,
+.rsm-today .cadence-agenda h3 {
+  color: #172033;
+}
+.rsm-today .priority-card p,
+.rsm-today .cadence-agenda header p,
+.rsm-today .priority-card .priority-owner {
+  color: #475569 !important;
+}
+.rsm-today .priority-card a,
+.rsm-today .cadence-agenda a {
+  color: #1d4ed8;
+}
+@media (max-width: 620px) {
+  .operating-timeline > li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+@media (max-width: 800px) {
+  .role-context-header {
+    margin: 16px 20px 0;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .role-context-identity {
+    justify-content: flex-start;
+  }
+  .cadence-agenda {
+    margin: 16px 20px;
+  }
 }
 .admin-page {
   min-height: 100vh;

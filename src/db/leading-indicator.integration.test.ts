@@ -40,6 +40,23 @@ describe.skipIf(!connectionString)("PostgreSQL leading indicators", () => {
     ).toHaveLength(0);
   });
 
+  it("returns an anonymized organization cohort benchmark for an execution indicator", async () => {
+    const cohort = await a.getOrganizationCohortBenchmark({
+      organizationId,
+      indicatorType: "EXECUTIVE_ECONOMIC_BUYER_ENGAGEMENT",
+    });
+    expect(cohort.cohortSize).toBeGreaterThan(0);
+    expect(cohort.score).toBeGreaterThanOrEqual(0);
+    expect(cohort.score).toBeLessThanOrEqual(100);
+    const cohortAccounts = (
+      await pool.query(
+        `SELECT count(DISTINCT account_id)::int count FROM leading_indicators WHERE organization_id=$1 AND indicator_type='EXECUTIVE_ENGAGEMENT' AND status IN('AT_RISK','CRITICAL')`,
+        [organizationId],
+      )
+    ).rows[0].count;
+    expect(cohortAccounts).toBeGreaterThanOrEqual(2);
+  });
+
   it("upserts one indicator, preserves evidence, and writes Twin events and audit", async () => {
     const sourceKey = `test-indicator:${crypto.randomUUID()}`;
     const first = await a.upsertIndicator({

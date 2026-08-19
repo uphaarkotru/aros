@@ -3,8 +3,6 @@ import { requireIdentity } from "@/auth/guards.server";
 import { cadenceRepository } from "@/db/cadence-repository";
 import { identityRepository } from "@/auth/repository.server";
 import { getMembership } from "@/auth/tenant-model";
-import { ApplicationShell } from "@/components/application-shell";
-import "../today/rsm/rsm.css";
 const meetingTime = (value: string | null) =>
   value
     ? new Intl.DateTimeFormat("en-US", {
@@ -78,59 +76,57 @@ export default async function Page() {
         )
       : [];
   return (
-    <ApplicationShell active="accounts">
-      <main className="rsm-today">
-        <header className="rsm-hero">
-          <div>
-            <span className="eyebrow">UNIFIED REVENUE CADENCE</span>
-            <h1>Cadences</h1>
-            <p>
-              AI-prepared operating sessions, decisions, commitments, and
-              persistent revenue-motion memory.
-            </p>
-          </div>
-        </header>
-        <section className="rsm-section cadence-calendar">
-          <div className="section-heading">
-            <div>
-              <h2>Upcoming meetings</h2>
-              <p>
-                Prepared from current signals, open decisions, and prior action
-                items.
-              </p>
-            </div>
-            <span>
-              {items.filter((item) => item.status !== "COMPLETED").length}{" "}
-              upcoming
-            </span>
-          </div>
-          {items.some((item) => item.status !== "COMPLETED") ? (
-            <div className="cadence-meeting-list">
-              {items
-                .filter((item) => item.status !== "COMPLETED")
-                .map((item) => (
-                  <CadenceCard item={item} key={item.id} />
-                ))}
-            </div>
-          ) : (
-            <p className="empty-brief">
-              No upcoming cadence meetings are currently assigned to you.
-            </p>
-          )}
-        </section>
-        <section className="rsm-section">
-          <h2>Recent cadence memory</h2>
-          <p className="scope-note">
-            Completed meetings remain available so AROS can carry decisions and
-            commitments into the next conversation.
+    <main className="rsm-today operating-light">
+      <header className="rsm-hero">
+        <div>
+          <span className="eyebrow">UNIFIED REVENUE CADENCE</span>
+          <h1>Cadences</h1>
+          <p>
+            AI-prepared operating sessions, decisions, commitments, and
+            persistent revenue-motion memory.
           </p>
-          {items
-            .filter((item) => item.status === "COMPLETED")
-            .map((item) => (
-              <CadenceCard item={item} key={item.id} />
-            ))}
-        </section>
-      </main>
-    </ApplicationShell>
+        </div>
+      </header>
+      <section className="rsm-section cadence-calendar">
+        <div className="section-heading">
+          <div>
+            <h2>Upcoming meetings</h2>
+            <p>
+              Prepared from current signals, open decisions, and prior action
+              items.
+            </p>
+          </div>
+          <span>
+            {items.filter((item) => item.status !== "COMPLETED").length}{" "}
+            upcoming
+          </span>
+        </div>
+        {items.some((item) => item.status !== "COMPLETED") ? (
+          <div className="cadence-meeting-list">
+            {items
+              .filter((item) => item.status !== "COMPLETED")
+              .map((item) => (
+                <CadenceCard item={item} key={item.id} />
+              ))}
+          </div>
+        ) : (
+          <p className="empty-brief">
+            No upcoming cadence meetings are currently assigned to you.
+          </p>
+        )}
+      </section>
+      <section className="rsm-section">
+        <h2>Recent cadence memory</h2>
+        <p className="scope-note">
+          Completed meetings remain available so AROS can carry decisions and
+          commitments into the next conversation.
+        </p>
+        {items
+          .filter((item) => item.status === "COMPLETED")
+          .map((item) => (
+            <CadenceCard item={item} key={item.id} />
+          ))}
+      </section>
+    </main>
   );
 }
