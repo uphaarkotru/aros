@@ -10,6 +10,7 @@ export const aeNavigation: NavigationEntry[] = [
   { label: "Accounts", href: "/accounts" },
   { label: "Opportunities", href: "/opportunities" },
   { label: "Cadences", href: "/cadences" },
+  { label: "Performance", href: "/performance" },
 ];
 
 /** Canonical navigation for each revenue role. Keep this shared by every shell. */
@@ -51,12 +52,11 @@ export const roleNavigation: Partial<Record<RevenueRole, NavigationEntry[]>> = {
     { label: "Accounts", href: "/accounts" },
     { label: "Opportunities", href: "/opportunities" },
     { label: "Cadences", href: "/cadences" },
-    { label: "Forecast", href: "/forecast" },
     { label: "Performance", href: "/performance" },
-    { label: "Learning", href: "/performance" },
   ],
   CRO: [
-    { label: "Forecast", href: "/forecast" },
+    { label: "Accounts", href: "/accounts" },
+    { label: "Opportunities", href: "/opportunities" },
     { label: "Cadences", href: "/cadences" },
     { label: "Performance", href: "/performance" },
   ],

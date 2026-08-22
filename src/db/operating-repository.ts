@@ -211,3 +211,253 @@ export async function getOperatingPerformanceByMembership(
     },
   }));
 }
+
+export type TeamSellingSignalKey =
+  | "SE"
+  | "PARTNER"
+  | "SDR"
+  | "TWO_BY_TWO"
+  | "FCTO"
+  | "VALUE_ENGINEERING"
+  | "CUSTOMER_SIGNAL";
+
+export type TeamSellingSignal = {
+  key: TeamSellingSignalKey;
+  label: string;
+  score: number;
+  detail: string;
+  coachingSuggestion: string;
+};
+
+export type TeamSellingScore = {
+  score: number;
+  status: "HEALTHY" | "WATCH" | "AT_RISK" | "CRITICAL";
+  signals: TeamSellingSignal[];
+  coachingSuggestions: string[];
+};
+
+export function averageTeamSellingScores(
+  scores: TeamSellingScore[],
+): TeamSellingScore | null {
+  if (!scores.length) return null;
+  const signals = scores[0].signals.map((signal, index) => {
+    const score = Math.round(
+      scores.reduce(
+        (total, item) => total + (item.signals[index]?.score ?? 0),
+        0,
+      ) / scores.length,
+    );
+    return {
+      ...signal,
+      score,
+      detail: `Average across ${scores.length} AE${scores.length === 1 ? "" : "s"}.`,
+    };
+  });
+  const score = Math.round(
+    scores.reduce((total, item) => total + item.score, 0) / scores.length,
+  );
+  return {
+    score,
+    status: teamSellingStatus(score),
+    signals,
+    coachingSuggestions: [
+      ...new Set(scores.flatMap((item) => item.coachingSuggestions)),
+    ].slice(0, 3),
+  };
+}
+
+type TeamSellingSession = {
+  membershipId: string;
+  templateCode: string;
+  scope: string;
+  occurredAt: string;
+  status: string;
+  participantRoles: string[];
+  hasSignal: boolean;
+};
+
+const teamSellingDefinitions: Array<{
+  key: TeamSellingSignalKey;
+  label: string;
+  suggestion: string;
+  matches: (session: TeamSellingSession) => boolean;
+}> = [
+  {
+    key: "SE",
+    label: "SE cadence",
+    suggestion:
+      "Schedule a recurring AE–SE sync before the next technical or security signal.",
+    matches: (session) =>
+      session.templateCode === "AE_SE_SYNC" ||
+      session.participantRoles.some((role) =>
+        ["SALES_ENGINEER", "SALES_ENGINEER_MANAGER"].includes(role),
+      ),
+  },
+  {
+    key: "PARTNER",
+    label: "Partner Sales cadence",
+    suggestion:
+      "Bring Partner Sales into the next account plan and customer milestone.",
+    matches: (session) =>
+      session.templateCode === "AE_PARTNER_SYNC" ||
+      session.participantRoles.includes("PARTNER_SALES"),
+  },
+  {
+    key: "SDR",
+    label: "SDR cadence",
+    suggestion:
+      "Set a weekly AE–SDR account-mapping checkpoint for stakeholder coverage.",
+    matches: (session) =>
+      session.templateCode === "AE_SDR_SYNC" ||
+      session.participantRoles.includes("SDR"),
+  },
+  {
+    key: "TWO_BY_TWO",
+    label: "2x2 meeting",
+    suggestion:
+      "Prepare the next 2x2 with named customer outcomes and internal owners.",
+    matches: (session) => session.templateCode === "CROSS_FUNCTIONAL_2X2",
+  },
+  {
+    key: "FCTO",
+    label: "FCTO involvement",
+    suggestion:
+      "Invite the Field CTO when executive, architecture, or strategic value needs validation.",
+    matches: (session) => session.participantRoles.includes("FIELD_CTO"),
+  },
+  {
+    key: "VALUE_ENGINEERING",
+    label: "Value Engineering",
+    suggestion:
+      "Pull Value Engineering into the next quantified business-value or ROI milestone.",
+    matches: (session) =>
+      session.participantRoles.includes("VALUE_ENGINEERING"),
+  },
+  {
+    key: "CUSTOMER_SIGNAL",
+    label: "Customer signal coverage",
+    suggestion:
+      "Attach the right internal stakeholder to the next customer meeting tied to the active signal.",
+    matches: (session) =>
+      session.scope === "CUSTOMER" &&
+      session.hasSignal &&
+      session.participantRoles.some((role) => role !== "AE"),
+  },
+];
+
+const teamSellingStatus = (score: number): TeamSellingScore["status"] =>
+  score >= 80
+    ? "HEALTHY"
+    : score >= 60
+      ? "WATCH"
+      : score >= 40
+        ? "AT_RISK"
+        : "CRITICAL";
+
+const teamSellingSignalScore = (sessions: TeamSellingSession[]) => {
+  const valid = sessions.filter((session) => session.status !== "CANCELLED");
+  if (!valid.length)
+    return { score: 0, detail: "No cadence evidence in the last 90 days." };
+  const now = Date.now();
+  const recent = valid.filter(
+    (session) => now - new Date(session.occurredAt).getTime() <= 45 * 86400000,
+  ).length;
+  if (recent >= 2)
+    return {
+      score: 100,
+      detail: `${recent} recent cadences in the last 45 days.`,
+    };
+  if (recent === 1)
+    return { score: 80, detail: "One recent cadence in the last 45 days." };
+  return { score: 50, detail: "Cadence evidence is older than 45 days." };
+};
+
+export function calculateTeamSellingScore(
+  membershipId: string,
+  sessions: TeamSellingSession[],
+): TeamSellingScore {
+  const signals = teamSellingDefinitions.map((definition) => {
+    const evidence = sessions.filter(
+      (session) =>
+        session.membershipId === membershipId && definition.matches(session),
+    );
+    const result = teamSellingSignalScore(evidence);
+    return {
+      key: definition.key,
+      label: definition.label,
+      score: result.score,
+      detail: result.detail,
+      coachingSuggestion: definition.suggestion,
+    };
+  });
+  const score = Math.round(
+    signals.reduce((total, signal) => total + signal.score, 0) / signals.length,
+  );
+  return {
+    score,
+    status: teamSellingStatus(score),
+    signals,
+    coachingSuggestions: signals
+      .filter((signal) => signal.score < 80)
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 3)
+      .map((signal) => signal.coachingSuggestion),
+  };
+}
+
+/** Cross-functional cadence and customer-signal coverage for each AE. */
+export async function getTeamSellingScores(
+  organizationId: string,
+  membershipIds: string[],
+): Promise<Record<string, TeamSellingScore>> {
+  if (!membershipIds.length) return {};
+  const { rows } = await query(
+    `SELECT target.membership_id,
+      t.code AS template_code,s.scope,s.status,
+      COALESCE(s.completed_at,s.scheduled_at,s.created_at)::text AS occurred_at,
+      EXISTS(
+        SELECT 1 FROM leading_indicators li
+        WHERE li.organization_id=s.organization_id
+          AND ((s.opportunity_id IS NOT NULL AND li.opportunity_id=s.opportunity_id)
+            OR (s.account_id IS NOT NULL AND li.account_id=s.account_id))
+          AND li.observed_at >= now()-interval '90 days'
+      ) AS has_signal,
+      array_remove(array_agg(DISTINCT COALESCE(st.code,rd.code)),NULL) AS participant_roles
+     FROM cadence_sessions s
+     JOIN cadence_templates t ON t.organization_id=s.organization_id AND t.id=s.template_id
+     JOIN cadence_participants target ON target.organization_id=s.organization_id AND target.cadence_session_id=s.id
+     JOIN cadence_participants participant ON participant.organization_id=s.organization_id AND participant.cadence_session_id=s.id
+     LEFT JOIN organization_memberships pm ON pm.organization_id=participant.organization_id AND pm.id=participant.membership_id
+     LEFT JOIN membership_role_assignments a ON a.organization_id=pm.organization_id AND a.membership_id=pm.id AND a.is_primary AND a.effective_to IS NULL
+     LEFT JOIN organization_role_definitions rd ON rd.organization_id=a.organization_id AND rd.id=a.organization_role_definition_id
+     LEFT JOIN system_role_templates st ON st.id=rd.system_template_id
+     WHERE s.organization_id=$1 AND target.membership_id=ANY($2::text[])
+       AND COALESCE(s.completed_at,s.scheduled_at,s.created_at) >= now()-interval '90 days'
+     GROUP BY target.membership_id,t.code,s.scope,s.status,s.id,s.completed_at,s.scheduled_at,s.created_at,s.organization_id,s.account_id,s.opportunity_id`,
+    [organizationId, membershipIds],
+  );
+  const sessionsByMembership = new Map<string, TeamSellingSession[]>();
+  for (const row of rows) {
+    const session: TeamSellingSession = {
+      membershipId: String(row.membership_id),
+      templateCode: String(row.template_code),
+      scope: String(row.scope),
+      occurredAt: String(row.occurred_at),
+      status: String(row.status),
+      participantRoles: (row.participant_roles ?? []).map(String),
+      hasSignal: Boolean(row.has_signal),
+    };
+    const existing = sessionsByMembership.get(session.membershipId) ?? [];
+    existing.push(session);
+    sessionsByMembership.set(session.membershipId, existing);
+  }
+  return Object.fromEntries(
+    membershipIds.map((membershipId) => [
+      membershipId,
+      calculateTeamSellingScore(
+        membershipId,
+        sessionsByMembership.get(membershipId) ?? [],
+      ),
+    ]),
+  );
+}

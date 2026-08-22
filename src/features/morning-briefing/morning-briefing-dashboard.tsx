@@ -23,6 +23,7 @@ import {
   summarizeRevenueExecutionHealth,
   type RevenueExecutionIndicator,
 } from "@/revenue-execution-indicators/domain";
+import type { TeamSellingScore } from "@/db/operating-repository";
 import { aeNavigation } from "@/components/navigation-config";
 
 const navItems = [{ label: "Today", href: "/today" }, ...aeNavigation];
@@ -831,12 +832,84 @@ export function RevenueExecutionHealthStrip({
   );
 }
 
+export function TeamSellingHealthCard({
+  score,
+  title = "My team selling health",
+  description = "Cross-functional coverage across the active customer motion.",
+  href,
+  compact = false,
+}: {
+  score: TeamSellingScore;
+  title?: string;
+  description?: string;
+  href?: string;
+  compact?: boolean;
+}) {
+  const content = (
+    <section
+      className={`team-selling-health panel ${compact ? "team-selling-health-compact" : ""}`}
+    >
+      <div className="team-selling-health-heading">
+        <div>
+          <span className="eyebrow">TEAM SELLING HEALTH</span>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <div
+          className={`team-selling-score-circle team-selling-score-${score.status.toLowerCase()}`}
+        >
+          <strong>{score.score}</strong>
+          <span>Team Selling</span>
+        </div>
+      </div>
+      <div className="team-selling-health-signals">
+        {score.signals.map((signal) => (
+          <span
+            className={`team-selling-health-signal team-selling-health-signal-${signal.score >= 80 ? "on" : signal.score >= 50 ? "watch" : "off"}`}
+            key={signal.key}
+            title={signal.detail}
+          >
+            {signal.label}
+          </span>
+        ))}
+      </div>
+      <div className="team-selling-health-coaching">
+        <strong>
+          {score.coachingSuggestions.length
+            ? "Coaching focus"
+            : "Coverage is on track"}
+        </strong>
+        <span>
+          {score.coachingSuggestions[0] ??
+            "Keep the current cross-functional cadence and connect experts to the next customer milestone."}
+        </span>
+      </div>
+      {href && (
+        <span className="team-selling-health-link">
+          Open Team Selling detail →
+        </span>
+      )}
+    </section>
+  );
+  return href ? (
+    <Link href={href} className="team-selling-health-link-wrapper">
+      {content}
+    </Link>
+  ) : (
+    content
+  );
+}
+
 export function MorningBriefingDashboard({
   initialDecisions,
   assignedAccounts = [],
   cadences = [],
   executionIndicators = [],
   executionIndicatorsTitle = "My revenue execution health",
+  teamSellingScore,
+  teamSellingScoreTitle = "My team selling health",
+  teamSellingScoreDescription = "You are viewing your own team selling score across the active customer motion.",
+  teamSellingScoreHref,
   embedded = false,
 }: {
   initialDecisions: GovernedDecision[];
@@ -844,6 +917,10 @@ export function MorningBriefingDashboard({
   cadences?: CadenceSummary[];
   executionIndicators?: RevenueExecutionIndicator[];
   executionIndicatorsTitle?: string;
+  teamSellingScore?: TeamSellingScore;
+  teamSellingScoreTitle?: string;
+  teamSellingScoreDescription?: string;
+  teamSellingScoreHref?: string;
   embedded?: boolean;
 }) {
   const [humanState, dispatch] = useReducer(humanWorkflowReducer, {});
@@ -950,6 +1027,14 @@ export function MorningBriefingDashboard({
           indicators={executionIndicators}
           title={executionIndicatorsTitle}
         />
+        {teamSellingScore && (
+          <TeamSellingHealthCard
+            score={teamSellingScore}
+            title={teamSellingScoreTitle}
+            description={teamSellingScoreDescription}
+            href={teamSellingScoreHref}
+          />
+        )}
         <UpcomingCadences cadences={cadences} />
         {activeDecisions(decisions).length === 0 && (
           <div className="feed-state">

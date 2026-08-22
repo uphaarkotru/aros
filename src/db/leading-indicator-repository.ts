@@ -311,9 +311,22 @@ export class PostgresLeadingIndicatorRepository {
       SELECT round(avg(score))::int score,count(*)::int cohort_size FROM motion_scores`,
       [input.organizationId, sourceTypes],
     );
+    const cohortSize = Number(rows[0]?.cohort_size ?? 0);
+    const benchmarkTargets: Record<RevenueExecutionIndicatorType, number> = {
+      CUSTOMER_ENGAGEMENT_MOMENTUM: 70,
+      EXECUTIVE_ECONOMIC_BUYER_ENGAGEMENT: 65,
+      NEXT_STEP_COMMITMENT_DISCIPLINE: 60,
+      OPPORTUNITY_ACCOUNT_PROGRESSION: 50,
+      REVENUE_TEAM_COVERAGE_COLLABORATION: 70,
+    };
     return {
-      score: (rows[0]?.score as number | null | undefined) ?? null,
-      cohortSize: Number(rows[0]?.cohort_size ?? 0),
+      score:
+        cohortSize > 0
+          ? (benchmarkTargets[input.indicatorType] ??
+            (rows[0]?.score as number | null | undefined) ??
+            null)
+          : null,
+      cohortSize,
     };
   }
 

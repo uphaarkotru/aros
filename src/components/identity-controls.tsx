@@ -26,6 +26,11 @@ const defaultSimulationPeople: Partial<Record<RevenueRole, string>> = {
   VP_SALES: "user-vp-jennifer",
   CRO: "user-cro-michael",
 };
+const enabledSimulationRoles: RevenueRole[] = ["AE", "RSM", "VP_SALES", "CRO"];
+const simulationRoleOrder: RevenueRole[] = [
+  ...enabledSimulationRoles,
+  ...revenueRoles.filter((role) => !enabledSimulationRoles.includes(role)),
+];
 
 export function IdentityControls() {
   const sessionContext = useOptionalSession(),
@@ -62,13 +67,7 @@ export function IdentityControls() {
       body: JSON.stringify({ role, userId }),
     });
     if (response.ok) {
-      window.location.assign(
-        role
-          ? todayPath[role]
-          : session?.effectiveRole
-            ? todayPath[session.effectiveRole]
-            : "/admin",
-      );
+      window.location.assign(role ? todayPath[role] : "/admin");
     }
   }
   async function returnToAdmin() {
@@ -115,8 +114,12 @@ export function IdentityControls() {
                 }}
               >
                 <option value="">My role</option>
-                {revenueRoles.map((role) => (
-                  <option value={role} key={role}>
+                {simulationRoleOrder.map((role) => (
+                  <option
+                    value={role}
+                    key={role}
+                    disabled={!enabledSimulationRoles.includes(role)}
+                  >
                     {roleDisplay[role]}
                   </option>
                 ))}

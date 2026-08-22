@@ -12,6 +12,8 @@ import {
   aggregateRevenueExecutionSources,
   summarizeRevenueExecutionHealth,
 } from "@/revenue-execution-indicators/domain";
+import { getTeamSellingScores } from "@/db/operating-repository";
+import { query } from "@/db/client";
 
 export default async function Page() {
   const identity = await requireIdentity();
@@ -24,24 +26,36 @@ export default async function Page() {
     ),
     accountIds = identity.scope?.accountIds ?? [];
   const allowed = new Set(accountIds);
-  const [actions, organizationAccounts, cadences, leadingIndicators] =
-    await Promise.all([
-      revenueRepository.listActions(identity.organization.id, accountIds),
-      revenueRepository.listAccounts(identity.organization.id),
-      cadenceRepository
-        ? cadenceRepository.listCadences(
-            identity.organization.id,
-            effectiveMembership?.id ?? identity.membership.id,
-          )
-        : [],
-      leadingIndicatorRepository && effectiveMembership
-        ? leadingIndicatorRepository.listForViewer({
-            organizationId: identity.organization.id,
-            membershipId: effectiveMembership.id,
-          })
-        : [],
-    ]);
+  const [
+    actions,
+    organizationAccounts,
+    cadences,
+    leadingIndicators,
+    opportunities,
+  ] = await Promise.all([
+    revenueRepository.listActions(identity.organization.id, accountIds),
+    revenueRepository.listAccounts(identity.organization.id),
+    cadenceRepository
+      ? cadenceRepository.listCadences(
+          identity.organization.id,
+          effectiveMembership?.id ?? identity.membership.id,
+        )
+      : [],
+    leadingIndicatorRepository && effectiveMembership
+      ? leadingIndicatorRepository.listForViewer({
+          organizationId: identity.organization.id,
+          membershipId: effectiveMembership.id,
+        })
+      : [],
+    query(
+      `SELECT id,account_id FROM opportunities WHERE organization_id=$1 AND account_id=ANY($2::text[])`,
+      [identity.organization.id, accountIds],
+    ),
+  ]);
   const membershipId = effectiveMembership?.id ?? identity.membership.id;
+  const teamSellingScore = (
+    await getTeamSellingScores(identity.organization.id, [membershipId])
+  )[membershipId];
   const toSource = (indicator: (typeof leadingIndicators)[number]) => ({
     id: indicator.id,
     indicatorType: indicator.indicator_type,
@@ -53,11 +67,27 @@ export default async function Page() {
     accountId: indicator.account_id ?? undefined,
     opportunityId: indicator.opportunity_id ?? undefined,
   });
+  const opportunityAccountIds = new Map(
+    opportunities.rows.map((opportunity) => [
+      opportunity.id,
+      opportunity.account_id,
+    ]),
+  );
   const scopedSources = leadingIndicators
     .filter(
       (indicator) => !indicator.account_id || allowed.has(indicator.account_id),
     )
-    .map(toSource);
+    .map((indicator) => {
+      const source = toSource(indicator);
+      return {
+        ...source,
+        accountId:
+          source.accountId ??
+          (source.opportunityId
+            ? (opportunityAccountIds.get(source.opportunityId) ?? undefined)
+            : undefined),
+      };
+    });
   const accountRollups = organizationAccounts
     .filter((account) => allowed.has(account.id))
     .map((account) => {
@@ -127,6 +157,10 @@ export default async function Page() {
         }))}
         executionIndicators={executionIndicators}
         executionIndicatorsTitle="My territory execution health"
+        teamSellingScore={teamSellingScore}
+        teamSellingScoreTitle="My team selling health"
+        teamSellingScoreDescription="You do not have direct reports in this view—you are viewing your own Team Selling Score across the customer motion you manage."
+        teamSellingScoreHref={`/performance/${encodeURIComponent(membershipId)}`}
         embedded
       />
     </>

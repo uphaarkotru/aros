@@ -13,7 +13,11 @@ import {
 } from "@/components/revenue-operating";
 import { leadingIndicatorRepository } from "@/db/leading-indicator-repository";
 import { aggregateRevenueExecutionSources } from "@/revenue-execution-indicators/domain";
-import { RevenueExecutionHealthStrip } from "@/features/morning-briefing/morning-briefing-dashboard";
+import {
+  RevenueExecutionHealthStrip,
+  TeamSellingHealthCard,
+} from "@/features/morning-briefing/morning-briefing-dashboard";
+import { getTeamSellingScores } from "@/db/operating-repository";
 const money = (value: number | null) =>
   value
     ? new Intl.NumberFormat("en-US", {
@@ -108,6 +112,10 @@ export default async function Page() {
       }),
     };
   });
+  const teamSellingScores = await getTeamSellingScores(
+    identity.organization.id,
+    brief.reports.map((report) => report.membership_id),
+  );
   return (
     <main className="rsm-today">
       <header className="rsm-hero">
@@ -269,6 +277,24 @@ export default async function Page() {
         ) : (
           <p className="empty-brief">No coaching themes require attention.</p>
         )}
+        {brief.reports.flatMap((report) =>
+          (
+            teamSellingScores[report.membership_id]?.coachingSuggestions ?? []
+          ).map((suggestion) => (
+            <article
+              className="brief-row team-selling-coaching-row"
+              key={`${report.membership_id}-${suggestion}`}
+            >
+              <div>
+                <strong>{report.display_name} · Team Selling</strong>
+                <small>
+                  Team Selling coverage is below the healthy standard.
+                </small>
+              </div>
+              <span>{suggestion}</span>
+            </article>
+          )),
+        )}
       </section>
       <section className="rsm-section rsm-ae-health-section">
         <h2>Revenue execution health by AE</h2>
@@ -287,6 +313,28 @@ export default async function Page() {
               key={report.membership_id}
             />
           ))}
+        </div>
+      </section>
+      <section className="rsm-section rsm-team-selling-section">
+        <h2>Team Selling Health by AE</h2>
+        <p className="section-note">
+          Cross-functional cadence and customer-signal coverage for each AE on
+          your team. Open an AE for coaching actions and detailed evidence.
+        </p>
+        <div className="rsm-team-selling-list">
+          {brief.reports.map((report) => {
+            const score = teamSellingScores[report.membership_id];
+            return score ? (
+              <TeamSellingHealthCard
+                compact
+                description="SE, Partner Sales, SDR, 2x2, FCTO, Value Engineering, and customer-signal coverage."
+                href={`/performance/${encodeURIComponent(report.membership_id)}`}
+                key={report.membership_id}
+                score={score}
+                title={report.display_name}
+              />
+            ) : null;
+          })}
         </div>
       </section>
     </main>

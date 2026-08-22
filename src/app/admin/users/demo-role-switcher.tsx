@@ -3,6 +3,12 @@ import { useState } from "react";
 import { revenueRoles, type RevenueRole } from "@/auth/types";
 import { roleDisplay, todayPath } from "@/auth/permissions";
 
+const enabledRoles: RevenueRole[] = ["AE", "RSM", "VP_SALES", "CRO"];
+const roleOrder: RevenueRole[] = [
+  ...enabledRoles,
+  ...revenueRoles.filter((role) => !enabledRoles.includes(role)),
+];
+
 export function DemoRoleSwitcher({
   people,
 }: {
@@ -30,8 +36,12 @@ export function DemoRoleSwitcher({
           <option value="" disabled>
             Select experience…
           </option>
-          {revenueRoles.map((item) => (
-            <option key={item} value={item}>
+          {roleOrder.map((item) => (
+            <option
+              key={item}
+              value={item}
+              disabled={!enabledRoles.includes(item)}
+            >
               {roleDisplay[item]}
             </option>
           ))}

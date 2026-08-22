@@ -3,6 +3,7 @@ import { requireIdentity } from "@/auth/guards.server";
 import {
   getOperatingPerformance,
   getOperatingPerformanceByMembership,
+  getTeamSellingScores,
 } from "@/db/operating-repository";
 import { OperatingPage } from "@/components/operating-page";
 import { identityRepository } from "@/auth/repository.server";
@@ -11,6 +12,7 @@ import { query } from "@/db/client";
 import { leadingIndicatorRepository } from "@/db/leading-indicator-repository";
 import {
   aggregateRevenueExecutionSources,
+  revenueExecutionIndicatorDefinition,
   summarizeRevenueExecutionHealth,
 } from "@/revenue-execution-indicators/domain";
 
@@ -45,14 +47,23 @@ export default async function PerformancePage() {
         [identity.organization.id, currentMembership.id],
       )
     : { rows: [] };
-  const teamMembershipIds = directReports.rows.length
-    ? directReports.rows.map((row) => String(row.membership_id))
-    : scopedMembershipIds.filter((id) => id !== currentMembership?.id);
+  const isAe = identity.effectiveRole === "AE";
+  const teamMembershipIds = isAe
+    ? currentMembership
+      ? [currentMembership.id]
+      : [identity.membership.id]
+    : directReports.rows.length
+      ? directReports.rows.map((row) => String(row.membership_id))
+      : scopedMembershipIds.filter((id) => id !== currentMembership?.id);
   const performance = await getOperatingPerformance(
     identity.organization.id,
     scopedMembershipIds.length ? scopedMembershipIds : [identity.membership.id],
   );
   const members = await getOperatingPerformanceByMembership(
+    identity.organization.id,
+    teamMembershipIds,
+  );
+  const teamSellingScores = await getTeamSellingScores(
     identity.organization.id,
     teamMembershipIds,
   );
@@ -79,7 +90,11 @@ export default async function PerformancePage() {
           opportunityId: source.opportunity_id ?? undefined,
         })),
       });
-      return { ...member, health: summarizeRevenueExecutionHealth(indicators) };
+      return {
+        ...member,
+        health: summarizeRevenueExecutionHealth(indicators),
+        indicators,
+      };
     }),
   );
   const isRsm = identity.effectiveRole === "RSM";
@@ -88,21 +103,21 @@ export default async function PerformancePage() {
       <main className="rsm-today operating-light">
         <header className="rsm-hero">
           <div>
-            <span className="eyebrow">OPERATING HEALTH</span>
+            <span className="eyebrow">CROSS-FUNCTIONAL EXECUTION</span>
             <h1>Performance</h1>
             <p>
-              See execution health at a glance, then open any owner for the
-              evidence and actions behind the metric.
+              Combine Leading Indicators with Team Selling Score to see where
+              each owner needs evidence, coaching, and a focused next action.
             </p>
           </div>
         </header>
         <section
           className="rsm-section performance-summary"
-          aria-label="Scope performance summary"
+          aria-label="Team Selling scope summary"
         >
           <div className="section-heading">
             <div>
-              <h2>My operating scope</h2>
+              <h2>Operating scope</h2>
               <p>
                 Rollup across the people and revenue motions currently in scope.
               </p>
@@ -140,12 +155,18 @@ export default async function PerformancePage() {
           <div className="section-heading">
             <div>
               <h2>
-                {isRsm ? "Performance by AE" : "Performance by team member"}
+                {isAe
+                  ? "My team selling score"
+                  : isRsm
+                    ? "Team selling by AE"
+                    : "Team selling by team member"}
               </h2>
               <p>
-                {isRsm
-                  ? "Open an AE to inspect their operating metrics, leading indicators, and focused actions."
-                  : "Open a team member to inspect their operating metrics and focused actions."}
+                {isAe
+                  ? "Open your own leading indicators, cross-functional coverage, and next coaching action."
+                  : isRsm
+                    ? "Open an AE to inspect cadence coverage, customer-signal involvement, and coaching actions."
+                    : "Open a team member to inspect cadence coverage and coaching actions."}
               </p>
             </div>
             <span className="performance-count">
@@ -168,11 +189,46 @@ export default async function PerformancePage() {
                       <h3>{member.displayName}</h3>
                     </div>
                     <div
-                      className={`performance-health performance-health-${member.health.status.toLowerCase()}`}
+                      className={`performance-health performance-health-${teamSellingScores[member.membershipId]?.status.toLowerCase() ?? "critical"}`}
                     >
-                      <strong>{member.health.score ?? "—"}</strong>
-                      <span>health</span>
+                      <strong>
+                        {teamSellingScores[member.membershipId]?.score ?? "—"}
+                      </strong>
+                      <span>team selling</span>
                     </div>
+                  </div>
+                  <div className="team-selling-signal-row">
+                    {(teamSellingScores[member.membershipId]?.signals ?? [])
+                      .slice(0, 7)
+                      .map((signal) => (
+                        <span
+                          className={`team-selling-signal team-selling-signal-${signal.score >= 80 ? "on" : signal.score >= 50 ? "watch" : "off"}`}
+                          key={signal.key}
+                          title={signal.detail}
+                        >
+                          {signal.label}
+                        </span>
+                      ))}
+                  </div>
+                  <div className="performance-leading-indicators">
+                    <span className="performance-leading-indicators-label">
+                      Leading indicators
+                    </span>
+                    {member.indicators.map((indicator) => (
+                      <span
+                        key={indicator.indicatorType}
+                        title={indicator.rationale}
+                      >
+                        <small>
+                          {
+                            revenueExecutionIndicatorDefinition(
+                              indicator.indicatorType,
+                            ).label
+                          }
+                        </small>
+                        <strong>{indicator.score ?? "—"}</strong>
+                      </span>
+                    ))}
                   </div>
                   <div className="performance-member-metrics">
                     <span>
@@ -199,8 +255,18 @@ export default async function PerformancePage() {
                       interventions
                     </span>
                   </div>
+                  <span className="performance-coaching-preview">
+                    {teamSellingScores[member.membershipId]
+                      ?.coachingSuggestions[0] ??
+                      member.indicators.find(
+                        (indicator) =>
+                          indicator.status === "AT_RISK" ||
+                          indicator.status === "CRITICAL",
+                      )?.recommendedNextAction ??
+                      "Team selling coverage and leading indicators are on track."}
+                  </span>
                   <span className="performance-drilldown">
-                    Open performance detail →
+                    Open Team Selling detail →
                   </span>
                 </Link>
               ))}

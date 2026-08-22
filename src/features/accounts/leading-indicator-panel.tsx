@@ -9,6 +9,7 @@ export function LeadingIndicatorPanel({
   indicators,
   coachingInsights,
   timeline,
+  accountId,
 }: {
   indicators: LeadingIndicatorRecord[];
   coachingInsights: Array<{
@@ -22,11 +23,16 @@ export function LeadingIndicatorPanel({
     payload: { summary?: string };
     occurred_at: string;
   }>;
+  accountId?: string;
 }) {
+  const scopedAccountId =
+    accountId ??
+    indicators.find((indicator) => indicator.account_id)?.account_id ??
+    undefined;
   const canonical = indicators.length
     ? aggregateRevenueExecutionSources({
         organizationId: indicators[0].organization_id,
-        accountId: indicators[0].account_id ?? undefined,
+        accountId: scopedAccountId,
         sources: indicators.map((indicator) => ({
           id: indicator.id,
           indicatorType: indicator.indicator_type,
@@ -35,12 +41,11 @@ export function LeadingIndicatorPanel({
           rationale: indicator.rationale,
           evidence: indicator.evidence,
           observedAt: indicator.observed_at,
-          accountId: indicator.account_id ?? undefined,
+          accountId: indicator.account_id ?? scopedAccountId,
           opportunityId: indicator.opportunity_id ?? undefined,
         })),
       })
     : [];
-  const accountId = indicators[0]?.account_id ?? undefined;
   return (
     <section className="twin-card twin-wide leading-indicator-panel">
       <div className="twin-section-head">
@@ -61,7 +66,7 @@ export function LeadingIndicatorPanel({
             {canonical.map((indicator) => (
               <Link
                 className={`canonical-indicator canonical-${indicator.status.toLowerCase()}`}
-                href={`/today/revenue-execution/${indicator.indicatorType}${accountId ? `?accountId=${encodeURIComponent(accountId)}` : ""}`}
+                href={`/today/revenue-execution/${indicator.indicatorType}${scopedAccountId ? `?accountId=${encodeURIComponent(scopedAccountId)}` : ""}`}
                 key={indicator.indicatorType}
                 title="Open indicator details"
               >

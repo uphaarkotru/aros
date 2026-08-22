@@ -3,10 +3,6 @@ import { requireIdentity } from "@/auth/guards.server";
 import { identityRepository } from "@/auth/repository.server";
 import { toOrganizationAdminUser } from "@/auth/user-administration";
 import { UserAdmin } from "./user-admin";
-import { DemoRoleSwitcher } from "./demo-role-switcher";
-import { isDemoApplication } from "@/auth/application-mode";
-import { getApplicationMode } from "@/auth/application-mode";
-import { ApplicationModeControl } from "./application-mode-control";
 
 export default async function UsersAdminPage() {
   const identity = await requireIdentity();
@@ -31,18 +27,10 @@ export default async function UsersAdminPage() {
         ),
       );
   return (
-    <>
-      {isDemoApplication() && (
-        <DemoRoleSwitcher people={identity.simulatableUsers} />
-      )}
-      <div className="admin-mode-wrap">
-        <ApplicationModeControl initialMode={getApplicationMode()} />
-      </div>
-      <UserAdmin
-        initialUsers={users}
-        organizationName={identity.organization.name}
-        actorId={identity.user.id}
-      />
-    </>
+    <UserAdmin
+      initialUsers={users}
+      organizationName={identity.organization.name}
+      actorId={identity.user.id}
+    />
   );
 }

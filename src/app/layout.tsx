@@ -4,7 +4,6 @@ import "./auth.css";
 import "./admin.css";
 import "./today/rsm/rsm.css";
 import "./today/rsm/light.css";
-import { ApplicationModeBadge } from "@/components/application-mode-badge";
 
 export const metadata: Metadata = {
   title: "Morning Briefing | CogniVit AROS",
@@ -19,7 +18,6 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full">
-        <ApplicationModeBadge />
         {children}
       </body>
     </html>

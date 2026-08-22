@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { RevenueExecutionIndicator } from "@/revenue-execution-indicators/domain";
 import { RevenueExecutionHealthStrip } from "@/features/morning-briefing/morning-briefing-dashboard";
+import { TeamSellingHealthCard } from "@/features/morning-briefing/morning-briefing-dashboard";
+import type { TeamSellingScore } from "@/db/operating-repository";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -64,6 +66,13 @@ export interface LeadershipBrief {
     insight_count: number;
   }>;
   executionIndicators?: RevenueExecutionIndicator[];
+  managerRevenueExecution?: Array<{
+    membership_id: string;
+    display_name: string;
+    indicators: RevenueExecutionIndicator[];
+  }>;
+  managerTeamSelling?: Record<string, TeamSellingScore>;
+  teamSellingHealth?: TeamSellingScore | null;
 }
 
 export function LeadershipBriefing({
@@ -77,6 +86,49 @@ export function LeadershipBriefing({
     attention = brief.assessments.filter(
       (item) => item.aros_category === "HIGH_RISK",
     );
+  const executiveAttention = (
+    <section className="leadership-section">
+      <header>
+        <div>
+          <h2>Executive attention required</h2>
+          <p>
+            Exceptions where prior frontline and manager action has not yet
+            resolved the revenue risk.
+          </p>
+        </div>
+      </header>
+      <div className="leadership-attention-list">
+        {brief.interventions.length ? (
+          brief.interventions.map((item) => (
+            <Link
+              href={`/today/leadership/interventions/${item.id}`}
+              key={item.id}
+            >
+              <div className="leadership-priority">
+                <strong>{item.priority_score}</strong>
+                <span>priority</span>
+              </div>
+              <div>
+                <span className="eyebrow">
+                  {item.level} · {words(item.type)}
+                </span>
+                <h3>
+                  {item.account_name} · {money(Number(item.amount))}
+                </h3>
+                <p>{item.rationale}</p>
+                <strong>Recommended · {item.recommended_action}</strong>
+              </div>
+              <b>→</b>
+            </Link>
+          ))
+        ) : (
+          <p className="leadership-empty">
+            No {brief.level} interventions are currently eligible.
+          </p>
+        )}
+      </div>
+    </section>
+  );
   return (
     <main className="leadership-today">
       <header className="leadership-hero">
@@ -119,6 +171,8 @@ export function LeadershipBriefing({
         </article>
       </section>
 
+      {executiveAttention}
+
       <RevenueExecutionHealthStrip
         indicators={brief.executionIndicators ?? []}
         title={
@@ -128,47 +182,67 @@ export function LeadershipBriefing({
         }
         scopeLabel={isCro ? "the organization" : "your region"}
       />
-      <section className="leadership-section">
-        <header>
-          <div>
-            <h2>Executive attention required</h2>
-            <p>
-              Exceptions where prior frontline and manager action has not yet
-              resolved the revenue risk.
-            </p>
+      {isCro && brief.teamSellingHealth ? (
+        <section className="leadership-section leadership-manager-health">
+          <TeamSellingHealthCard
+            score={brief.teamSellingHealth}
+            title="My organizational team selling health"
+            description="Average AE-level cross-functional cadence and customer-signal coverage across the organization."
+          />
+        </section>
+      ) : null}
+      {!isCro && brief.managerRevenueExecution?.length ? (
+        <section className="leadership-section leadership-manager-health">
+          <header>
+            <div>
+              <h2>Revenue execution health by RSM</h2>
+              <p>
+                Five leading indicators consolidated across each RSM&apos;s
+                accounts and opportunities.
+              </p>
+            </div>
+          </header>
+          <div className="leadership-manager-health-list">
+            {brief.managerRevenueExecution.map((manager) => (
+              <RevenueExecutionHealthStrip
+                indicators={manager.indicators}
+                title={`${manager.display_name}'s revenue execution health`}
+                scopeLabel="their region"
+                instanceId={manager.membership_id}
+                key={manager.membership_id}
+              />
+            ))}
           </div>
-        </header>
-        <div className="leadership-attention-list">
-          {brief.interventions.length ? (
-            brief.interventions.map((item) => (
-              <Link
-                href={`/today/leadership/interventions/${item.id}`}
-                key={item.id}
-              >
-                <div className="leadership-priority">
-                  <strong>{item.priority_score}</strong>
-                  <span>priority</span>
-                </div>
-                <div>
-                  <span className="eyebrow">
-                    {item.level} · {words(item.type)}
-                  </span>
-                  <h3>
-                    {item.account_name} · {money(Number(item.amount))}
-                  </h3>
-                  <p>{item.rationale}</p>
-                  <strong>Recommended · {item.recommended_action}</strong>
-                </div>
-                <b>→</b>
-              </Link>
-            ))
-          ) : (
-            <p className="leadership-empty">
-              No {brief.level} interventions are currently eligible.
-            </p>
-          )}
-        </div>
-      </section>
+        </section>
+      ) : null}
+      {!isCro && brief.managerTeamSelling ? (
+        <section className="leadership-section leadership-manager-health">
+          <header>
+            <div>
+              <h2>Team Selling Health by RSM</h2>
+              <p>
+                Cross-functional cadence and customer-signal coverage for each
+                RSM. Open a manager for detailed coaching focus.
+              </p>
+            </div>
+          </header>
+          <div className="leadership-manager-health-list">
+            {brief.managerHealth.map((manager) => {
+              const score = brief.managerTeamSelling?.[manager.membership_id];
+              return score ? (
+                <TeamSellingHealthCard
+                  compact
+                  description="SE, Partner Sales, SDR, 2x2, FCTO, Value Engineering, and customer-signal coverage."
+                  href={`/performance/${encodeURIComponent(manager.membership_id)}`}
+                  key={manager.membership_id}
+                  score={score}
+                  title={manager.display_name}
+                />
+              ) : null;
+            })}
+          </div>
+        </section>
+      ) : null}
       <section className="leadership-section">
         <h2>Coaching themes across scope</h2>
         <p className="section-note">

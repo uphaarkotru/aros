@@ -771,6 +771,17 @@ async function main() {
         "INTERNAL_ONLY",
       ],
       [
+        "agenda-coinbase-1x1-team-selling",
+        "cadence-mark-sarah-next",
+        "TEAM_SELLING_COACHING",
+        92,
+        "Coach Team Selling coverage and leading-indicator gaps",
+        "Review the AE's Team Selling Score alongside any executive-access, commitment, progression, or stakeholder-coverage indicators below the healthy standard.",
+        "Agree the next SE, Partner Sales, SDR, 2x2, FCTO, Value Engineering, or customer-signal action and assign a dated owner.",
+        "Confirm the next customer milestone and the internal stakeholder who will join it",
+        "INTERNAL_ONLY",
+      ],
+      [
         "agenda-anita-raj-workload",
         "cadence-anita-raj-next",
         "TECHNICAL_WORKLOAD",
@@ -837,6 +848,17 @@ async function main() {
         "INTERNAL_ONLY",
       ],
       [
+        "agenda-paypal-manager-team-selling",
+        "cadence-paypal-mark-daniel-next",
+        "TEAM_SELLING_COACHING",
+        88,
+        "Build the cross-functional selling rhythm",
+        "Team Selling and leading-indicator coverage need a concrete cadence before the next customer milestone.",
+        "Choose the next internal expert touchpoint and link it to a customer-confirmed signal.",
+        "Set the next AE–RSM coaching checkpoint with an owner and date",
+        "INTERNAL_ONLY",
+      ],
+      [
         "agenda-nvidia-manager-next",
         "cadence-nvidia-olivia-priya-next",
         "EXECUTIVE_ENGAGEMENT",
@@ -845,6 +867,17 @@ async function main() {
         "The global rollout can accelerate if the executive discussion produces a clear decision path.",
         "Review stakeholder context, unresolved commitments, and the desired meeting outcome.",
         "Confirm briefing owner and follow-up commitments",
+        "INTERNAL_ONLY",
+      ],
+      [
+        "agenda-nvidia-manager-team-selling",
+        "cadence-nvidia-olivia-priya-next",
+        "TEAM_SELLING_COACHING",
+        88,
+        "Close Team Selling and stakeholder coverage gaps",
+        "Review leading-indicator risk and the internal stakeholder needed for the next customer conversation.",
+        "Agree the next cross-functional cadence and the customer signal it is intended to move.",
+        "Commit to one dated Team Selling action before the next 1:1",
         "INTERNAL_ONLY",
       ],
       [
@@ -1118,6 +1151,21 @@ async function main() {
         accountId,
       ],
     );
+    await client.query(
+      `INSERT INTO escalations(id,organization_id,account_id,opportunity_id,cadence_session_id,type,severity,from_level,to_level,reason,evidence,status,created_at) VALUES('escalation-coinbase-cro-eligible',$1,$2,$3,'cadence-coinbase-2x2','UNRESOLVED_STRATEGIC_RISK','CRITICAL','VP','CRO','Organization-level executive sponsorship is required to unblock the renewal decision',$4,'ELIGIBLE',$5) ON CONFLICT(organization_id,opportunity_id,to_level,type) WHERE opportunity_id IS NOT NULL AND status IN('ELIGIBLE','PENDING','ACKNOWLEDGED') DO UPDATE SET status=excluded.status,evidence=excluded.evidence`,
+      [
+        organizationId,
+        accountId,
+        opportunityId,
+        json([
+          "$22.4M exposure",
+          "security blocker remains unresolved",
+          "executive engagement declining",
+          "renewal decision approaching",
+        ]),
+        now,
+      ],
+    );
   }
 
   async function seedLeadership(client: PoolClient) {
@@ -1366,6 +1414,19 @@ async function main() {
           priorityScore: 96,
           level: "VP",
         }),
+        now,
+      ],
+    );
+    await client.query(
+      `INSERT INTO leadership_interventions(id,organization_id,opportunity_id,escalation_id,assessment_id,level,type,status,priority_score,summary,rationale,evidence,recommended_action,expected_outcome,idempotency_key,created_at,updated_at) VALUES('leadership-intervention-coinbase-cro',$1,'opp-coinbase-renewal','escalation-coinbase-cro-eligible','forecast-coinbase-current','CRO','EXECUTIVE_ESCALATION','ELIGIBLE',99,'Coinbase requires CRO executive sponsorship','Organization-level renewal risk remains unresolved after seller, manager, and VP intervention.',$2,'Assign a CRO sponsor and confirm the executive decision path','Restore executive alignment and unblock the security decision','demo-coinbase-cro-intervention',$3,$3) ON CONFLICT(id) DO UPDATE SET status=CASE WHEN leadership_interventions.status IN('APPROVED','ACTIONED','MONITORING','RESOLVED') THEN leadership_interventions.status ELSE 'ELIGIBLE' END,priority_score=excluded.priority_score,rationale=excluded.rationale,evidence=excluded.evidence,updated_at=excluded.updated_at`,
+      [
+        organizationId,
+        json([
+          "$22.4M exposure",
+          "security blocker remains unresolved",
+          "2 commitments missed",
+          "VP intervention has not resolved executive alignment",
+        ]),
         now,
       ],
     );

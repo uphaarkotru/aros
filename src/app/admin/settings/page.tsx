@@ -1,2 +1,32 @@
-import {requireOrganizationAdmin} from "@/auth/admin-guards.server";import {getApplicationMode} from "@/auth/application-mode";import {ApplicationModeControl} from "../users/application-mode-control";
-export default async function Settings(){const i=await requireOrganizationAdmin(),o=i.organization;return <main className="admin-workspace"><span className="eyebrow">ORGANIZATION SETTINGS</span><h1>{o.name}</h1><ApplicationModeControl initialMode={getApplicationMode()}/><div className="admin-card-grid"><article className="admin-card"><h2>Identity</h2><dl><dt>Domain</dt><dd>{o.primaryDomain??"Not set"}</dd><dt>Timezone</dt><dd>{o.timezone}</dd><dt>Fiscal year starts</dt><dd>Month {o.fiscalYearStartMonth??"Not set"}</dd></dl></article><article className="admin-card"><h2>Tenant environment</h2><strong>{o.environment}</strong><p>Tenant environment metadata is managed by the platform administrator.</p></article></div></main>}
+import { requireOrganizationAdmin } from "@/auth/admin-guards.server";
+export default async function Settings() {
+  const i = await requireOrganizationAdmin(),
+    o = i.organization;
+  return (
+    <main className="admin-workspace">
+      <span className="eyebrow">ORGANIZATION SETTINGS</span>
+      <h1>{o.name}</h1>
+      <div className="admin-card-grid">
+        <article className="admin-card">
+          <h2>Identity</h2>
+          <dl>
+            <dt>Domain</dt>
+            <dd>{o.primaryDomain ?? "Not set"}</dd>
+            <dt>Timezone</dt>
+            <dd>{o.timezone}</dd>
+            <dt>Fiscal year starts</dt>
+            <dd>Month {o.fiscalYearStartMonth ?? "Not set"}</dd>
+          </dl>
+        </article>
+        <article className="admin-card">
+          <h2>Tenant environment</h2>
+          <strong>{o.environment}</strong>
+          <p>
+            Tenant environment metadata is managed by the platform
+            administrator.
+          </p>
+        </article>
+      </div>
+    </main>
+  );
+}

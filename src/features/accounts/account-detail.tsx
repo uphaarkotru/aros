@@ -111,6 +111,7 @@ export function AccountDetail({
       </section>
       <div className="twin-grid">
         <LeadingIndicatorPanel
+          accountId={twin.accountId}
           indicators={leadingIndicators}
           coachingInsights={coachingInsights}
           timeline={timeline}
