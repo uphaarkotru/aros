@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { parseRole } from "@/auth/input";
-import { getRawSessionUser, setViewAsRole } from "@/auth/session.server";
+import {
+  getAuthenticatedIdentity,
+  getRawSessionUser,
+  setViewAsRole,
+} from "@/auth/session.server";
 import { recordAudit } from "@/auth/audit.server";
-import { isDemoApplication } from "@/auth/application-mode";
+import { isDemoOrganization } from "@/auth/application-mode";
 export async function POST(request: Request) {
-  const actor = await getRawSessionUser();
-  if (!actor)
+  const actor = await getRawSessionUser(),
+    identity = await getAuthenticatedIdentity();
+  if (!actor || !identity)
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!isDemoApplication())
+  if (!isDemoOrganization(identity.organization))
     return NextResponse.json(
       { error: "Role simulation is only available in Demo mode." },
       { status: 403 },
@@ -29,11 +34,15 @@ export async function POST(request: Request) {
       { error: "View As is unavailable" },
       { status: 403 },
     );
-  recordAudit(actor, {
-    event: role ? "demo.view_as.started" : "demo.view_as.ended",
-    resourceType: "user",
-    resourceId: userId ?? actor.id,
-    payload: { viewAsRole: role, viewAsUserId: userId },
-  });
+  recordAudit(
+    actor,
+    {
+      event: role ? "demo.view_as.started" : "demo.view_as.ended",
+      resourceType: "user",
+      resourceId: userId ?? actor.id,
+      payload: { viewAsRole: role, viewAsUserId: userId },
+    },
+    identity.organization.id,
+  );
   return NextResponse.json({ ok: true });
 }

@@ -1,7 +1,6 @@
 import { requireOrganizationAdmin } from "@/auth/admin-guards.server";
 import { identityRepository } from "@/auth/repository.server";
-import { getApplicationMode, isDemoApplication } from "@/auth/application-mode";
-import { ApplicationModeControl } from "./users/application-mode-control";
+import { isDemoOrganization } from "@/auth/application-mode";
 import { DemoRoleSwitcher } from "./users/demo-role-switcher";
 
 export default async function AdminOverview() {
@@ -67,14 +66,16 @@ export default async function AdminOverview() {
       <section className="admin-overview-controls" aria-label="Demo controls">
         <div className="admin-overview-control-card">
           <span className="eyebrow">DEMO CONTROLS</span>
-          <h2>Application mode and role simulation</h2>
+          <h2>Role simulation</h2>
           <p>
             These controls are available from Overview so revenue screens stay
             focused on the active role experience.
           </p>
-          <ApplicationModeControl initialMode={getApplicationMode()} />
-          {isDemoApplication() && (
+          {isDemoOrganization(identity.organization) && (
             <DemoRoleSwitcher people={identity.simulatableUsers} />
+          )}
+          {!isDemoOrganization(identity.organization) && (
+            <p>Role simulation is disabled for this tenant environment.</p>
           )}
         </div>
       </section>

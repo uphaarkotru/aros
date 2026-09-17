@@ -11,7 +11,7 @@ npm run db:seed
 npm run dev
 ```
 
-Start PostgreSQL first with `docker compose up -d postgres`, then copy `.env.example` to `.env.local`. `DATABASE_URL` is mandatory outside unit tests; runtime code intentionally has no file or fixture fallback. To rebuild a disposable development database use `ALLOW_DATABASE_RESET=true npm run db:reset`, followed by `npm run db:setup`. Run real-adapter isolation tests with `TEST_DATABASE_URL=... npm run test:postgres`.
+Start PostgreSQL first with `docker compose up -d postgres`, then copy `.env.example` to `.env.local`. PostgreSQL is the runtime system of record. `DATABASE_URL` is required when a request first accesses identity data; imports and production builds do not connect to PostgreSQL. Runtime access fails closed when it is absent, with no file, fixture, or in-memory production fallback. To rebuild a disposable development database use `ALLOW_DATABASE_RESET=true npm run db:reset`, followed by `npm run db:setup`.
 
 The deterministic seed is idempotent and writes CogniVit Demo Enterprise, Acme Software, Globex Technologies, identities, roles, reporting relationships, accounts, opportunities, Revenue Digital Twins, signals, actions, and revenue-team assignments through PostgreSQL. Demo and production use the same schema.
 
@@ -21,21 +21,21 @@ To import a previous `.aros-data/identity.json` while preserving IDs, emails, me
 AROS_IDENTITY_IMPORT_PATH=.aros-data/identity.json npm run db:import-identity
 ```
 
-Open `http://localhost:3000/login`. Every deterministic demo identity uses `ArosDemo!2026` unless `AROS_DEMO_PASSWORD` is set before the identity store is first created.
+Open `http://localhost:3000/login`. Seeded demo identities use `ArosDemo!2026` unless `AROS_DEMO_PASSWORD` is set during seeding. Credential hints are not rendered on tenant login pages.
 
-The application defaults to Demo mode, which displays seeded credentials and enables role simulation. Organization admins can change Application mode from the user administration screen. `AROS_APP_MODE=PRODUCTION` sets the initial mode; UI changes persist in `.aros-data/application.json` (or `AROS_APP_CONFIG_PATH`) and disable role simulation and demo credential hints.
+Demo behavior is tenant-specific and comes only from `organizations.environment`. `DEMO` tenants may expose authenticated role/person simulation to their organization administrators. `SANDBOX` and `PRODUCTION` tenants always use production-safe behavior. Only a platform `SUPER_ADMIN` can change an organization environment. Leaving `DEMO` clears that tenant's simulated-view session state and writes a security audit event; it cannot affect another tenant.
 
-| Role | Email |
-| --- | --- |
-| SDR | alex.morgan@demo.cognivit.ai |
-| AE | sarah.chen@demo.cognivit.ai |
-| RSM | mark.davis@demo.cognivit.ai |
-| Partner Sales | priya.shah@demo.cognivit.ai |
-| VP Sales | jennifer.lee@demo.cognivit.ai |
-| Organization admin | admin@demo.cognivit.ai |
-| CRO | michael.roberts@demo.cognivit.ai |
+| Role               | Email                            |
+| ------------------ | -------------------------------- |
+| SDR                | alex.morgan@demo.cognivit.ai     |
+| AE                 | sarah.chen@demo.cognivit.ai      |
+| RSM                | mark.davis@demo.cognivit.ai      |
+| Partner Sales      | priya.shah@demo.cognivit.ai      |
+| VP Sales           | jennifer.lee@demo.cognivit.ai    |
+| Organization admin | admin@demo.cognivit.ai           |
+| CRO                | michael.roberts@demo.cognivit.ai |
 
-Runtime identity, sessions, audit history, and tenant-owned revenue data are PostgreSQL-backed. Migrations `001` through `004` are applied in order and tracked in `schema_migrations`.
+Runtime identity, sessions, audit history, and tenant-owned revenue data are PostgreSQL-backed. Migrations `001` through `017` are applied in filename order and tracked in `schema_migrations`.
 
 ## Role and revenue-team semantics
 
@@ -50,7 +50,10 @@ npm run typecheck
 npm run lint
 npm test
 npm run build
+TEST_DATABASE_URL=postgresql://localhost/aros_test npm run test:postgres
 ```
+
+The PostgreSQL integration database must be disposable and already migrated and seeded (`DATABASE_URL=... npm run db:migrate && DATABASE_URL=... npm run db:seed`). CI uses an isolated PostgreSQL 16 service and never external credentials.
 
 ## Original Next.js notes
 

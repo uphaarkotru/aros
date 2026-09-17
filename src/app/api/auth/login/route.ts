@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { parseLoginInput } from "@/auth/input";
-import {identityRepository} from "@/auth/repository.server";
+import {
+  getIdentityRepository,
+  identityRepository,
+} from "@/auth/repository.server";
 import {
   authenticateCredentials,
   authenticateTenantCredentials,
@@ -8,6 +11,7 @@ import {
 import { createSession } from "@/auth/session.server";
 import { recordAudit } from "@/auth/audit.server";
 export async function POST(request: Request) {
+  await getIdentityRepository();
   await identityRepository.refresh?.();
   let body: unknown;
   try {

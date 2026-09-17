@@ -695,6 +695,11 @@ export class IdentityCommandRepository {
         )
       ).rows[0];
       if (!row) throw new ConcurrencyConflictError();
+      if (before.environment === "DEMO" && row.environment !== "DEMO")
+        await c.query(
+          `UPDATE auth_sessions SET view_as_role=NULL,view_as_user_id=NULL,last_seen_at=now() WHERE organization_id=$1 AND (view_as_role IS NOT NULL OR view_as_user_id IS NOT NULL)`,
+          [input.organizationId],
+        );
       if (input.owner) {
         await c.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
           `owners:${input.organizationId}`,
@@ -724,21 +729,31 @@ export class IdentityCommandRepository {
       }
       if (input.failAt === "audit") throw new Error("injected:audit");
       const event =
-        input.patch.status === "SUSPENDED"
-          ? "ORGANIZATION_SUSPENDED"
-          : before.status === "SUSPENDED" && input.patch.status === "ACTIVE"
-            ? "ORGANIZATION_REACTIVATED"
-            : input.patch.status === "ARCHIVED"
-              ? "ORGANIZATION_ARCHIVED"
-              : "ORGANIZATION_METADATA_UPDATED";
+        before.environment !== row.environment
+          ? "ORGANIZATION_ENVIRONMENT_UPDATED"
+          : input.patch.status === "SUSPENDED"
+            ? "ORGANIZATION_SUSPENDED"
+            : before.status === "SUSPENDED" && input.patch.status === "ACTIVE"
+              ? "ORGANIZATION_REACTIVATED"
+              : input.patch.status === "ARCHIVED"
+                ? "ORGANIZATION_ARCHIVED"
+                : "ORGANIZATION_METADATA_UPDATED";
       await this.audit(c, {
         actor: input.actor,
         organizationId: input.organizationId,
         event,
         resourceType: "organization",
         resourceId: input.organizationId,
-        before: { status: before.status, version: before.version },
-        after: { status: row.status, version: row.version },
+        before: {
+          status: before.status,
+          environment: before.environment,
+          version: before.version,
+        },
+        after: {
+          status: row.status,
+          environment: row.environment,
+          version: row.version,
+        },
       });
       return { organizationId: input.organizationId, version: row.version };
     }, true);

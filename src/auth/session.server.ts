@@ -2,11 +2,12 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import {
   flushIdentityRepository,
+  getIdentityRepository,
   identityRepository,
 } from "./repository.server";
 import { getUserScope } from "./hierarchy";
 import { toPublicUser, type RevenueRole, type User } from "./types";
-import { getApplicationMode, isDemoApplication } from "./application-mode";
+import { isDemoOrganization, type ApplicationMode } from "./application-mode";
 import { getMembership, primaryRoleContext } from "./tenant-model";
 import { resolvePermissions } from "./authorization";
 export const SESSION_COOKIE = "aros_session";
@@ -23,6 +24,7 @@ export async function createSession(
   user: User,
   organizationId = user.organizationId,
 ) {
+  await getIdentityRepository();
   const token = randomBytes(32).toString("base64url"),
     now = new Date(),
     expires = new Date(now.getTime() + SESSION_SECONDS * 1000);
@@ -49,6 +51,7 @@ export async function createSession(
   return token;
 }
 export async function destroySession() {
+  await getIdentityRepository();
   const jar = await cookies(),
     token = jar.get(SESSION_COOKIE)?.value;
   if (token) {
@@ -61,6 +64,7 @@ export async function destroySession() {
   jar.delete(SESSION_COOKIE);
 }
 export async function getAuthenticatedIdentity() {
+  await getIdentityRepository();
   await identityRepository.refresh?.();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -88,7 +92,8 @@ export async function getAuthenticatedIdentity() {
     membership?.status !== "ACTIVE"
   )
     return null;
-  const activeViewAsRole = isDemoApplication() ? session.viewAsRole : null,
+  const demoEnabled = isDemoOrganization(organization),
+    activeViewAsRole = demoEnabled ? session.viewAsRole : null,
     viewUser = activeViewAsRole
       ? identityRepository
           .read()
@@ -121,6 +126,7 @@ export async function getAuthenticatedIdentity() {
     ),
     effectiveRole: RevenueRole | null =
       activeViewAsRole ?? primary.template?.code ?? null;
+  const applicationMode: ApplicationMode = demoEnabled ? "DEMO" : "PRODUCTION";
   return {
     user: toPublicUser(user),
     membership,
@@ -137,7 +143,7 @@ export async function getAuthenticatedIdentity() {
       (viewUser ?? user).id,
       organization.id,
     ),
-    applicationMode: getApplicationMode(),
+    applicationMode,
     isViewingAs: Boolean(activeViewAsRole),
     viewAsRole: activeViewAsRole,
     viewAsUserId: activeViewAsRole ? (viewUser?.id ?? null) : null,
@@ -185,13 +191,17 @@ export async function setViewAsRole(
   role: RevenueRole | null,
   viewAsUserId: string | null = null,
 ) {
-  if (!isDemoApplication()) return false;
+  await getIdentityRepository();
   await identityRepository.refresh?.();
   const jar = await cookies(),
     token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return false;
   const session = identityRepository.findSessionByTokenHash(tokenHash(token));
   if (!session?.organizationId) return false;
+  const organization = identityRepository
+    .read()
+    .organizations.find((item) => item.id === session.organizationId);
+  if (!organization || !isDemoOrganization(organization)) return false;
   const user = identityRepository.findUserById(session.userId),
     membership = user
       ? getMembership(identityRepository, user.id, session.organizationId)
@@ -244,6 +254,7 @@ export async function setViewAsRole(
   return true;
 }
 export async function getRawSessionUser() {
+  await getIdentityRepository();
   await identityRepository.refresh?.();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;

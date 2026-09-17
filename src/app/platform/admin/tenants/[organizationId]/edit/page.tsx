@@ -1,2 +1,56 @@
-import Link from "next/link";import {notFound} from "next/navigation";import {requirePlatformAdmin} from "@/auth/admin-guards.server";import {identityRepository} from "@/auth/repository.server";import {TenantManager} from "../../../tenant-manager";
-export default async function EditTenantPage({params}:PageProps<"/platform/admin/tenants/[organizationId]/edit">){await requirePlatformAdmin();const{organizationId}=await params,store=identityRepository.read(),organization=store.organizations.find(item=>item.id===organizationId);if(!organization)notFound();const memberships=store.memberships.filter(item=>item.organizationId===organization.id&&item.adminRole!=="MEMBER"),administrators=memberships.map(item=>{const user=store.users.find(candidate=>candidate.id===item.userId);return `${user?.email??item.userId} · ${item.adminRole} · ${item.status}`}),ownerMembership=memberships.find(item=>item.adminRole==="ORG_OWNER"),ownerUser=ownerMembership?store.users.find(item=>item.id===ownerMembership.userId):undefined,owner=ownerUser?{id:ownerUser.id,email:ownerUser.email,firstName:ownerUser.firstName,lastName:ownerUser.lastName}:undefined;return <main className="admin-workspace"><Link className="back-link" href="/platform/admin">← Back to organizations</Link><h1>Edit tenant</h1><p>Update tenant metadata, lifecycle, environment, and primary owner details.</p><TenantManager organization={organization} administrators={administrators} owner={owner}/></main>}
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { requirePlatformAdmin } from "@/auth/admin-guards.server";
+import { identityRepository } from "@/auth/repository.server";
+import { TenantManager } from "../../../tenant-manager";
+type EditTenantPageProps = { params: Promise<{ organizationId: string }> };
+export default async function EditTenantPage({ params }: EditTenantPageProps) {
+  await requirePlatformAdmin();
+  const { organizationId } = await params,
+    store = identityRepository.read(),
+    organization = store.organizations.find(
+      (item) => item.id === organizationId,
+    );
+  if (!organization) notFound();
+  const memberships = store.memberships.filter(
+      (item) =>
+        item.organizationId === organization.id && item.adminRole !== "MEMBER",
+    ),
+    administrators = memberships.map((item) => {
+      const user = store.users.find(
+        (candidate) => candidate.id === item.userId,
+      );
+      return `${user?.email ?? item.userId} · ${item.adminRole} · ${item.status}`;
+    }),
+    ownerMembership = memberships.find(
+      (item) => item.adminRole === "ORG_OWNER",
+    ),
+    ownerUser = ownerMembership
+      ? store.users.find((item) => item.id === ownerMembership.userId)
+      : undefined,
+    owner = ownerUser
+      ? {
+          id: ownerUser.id,
+          email: ownerUser.email,
+          firstName: ownerUser.firstName,
+          lastName: ownerUser.lastName,
+        }
+      : undefined;
+  return (
+    <main className="admin-workspace">
+      <Link className="back-link" href="/platform/admin">
+        ← Back to organizations
+      </Link>
+      <h1>Edit tenant</h1>
+      <p>
+        Update tenant metadata, lifecycle, environment, and primary owner
+        details.
+      </p>
+      <TenantManager
+        organization={organization}
+        administrators={administrators}
+        owner={owner}
+      />
+    </main>
+  );
+}

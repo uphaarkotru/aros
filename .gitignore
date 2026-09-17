@@ -43,3 +43,4 @@ next-env.d.ts
 # development-only evaluation artifacts
 /.aros/
 /.aros-data/
+.env.neon
